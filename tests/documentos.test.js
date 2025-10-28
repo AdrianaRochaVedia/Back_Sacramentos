@@ -9,8 +9,8 @@ describe('Documentos', () => {
     const res = await request(app)
       .post('/api/usuarios')
       .send({
-        correo: 'juan@test.com',
-        contrasenia: 'StrongPass123!'
+        email: 'juan@test.com',
+        password: 'StrongPass123!'
       });
     token = res.body.token;
   });

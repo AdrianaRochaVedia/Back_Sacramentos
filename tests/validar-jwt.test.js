@@ -42,14 +42,14 @@ describe('Middleware validarJWT', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  test('Debe llamar a next() y asignar uid y correo si token es válido', () => {
+  test('Debe llamar a next() y asignar uid y email si token es válido', () => {
     req.header.mockReturnValue('token-valido');
-    jwt.verify.mockReturnValue({ uid: 123, correo: 'test@example.com' });
+    jwt.verify.mockReturnValue({ uid: 123, email: 'test@example.com' });
 
     validarJWT(req, res, next);
 
     expect(req.uid).toBe(123);
-    expect(req.correo).toBe('test@example.com');
+    expect(req.email).toBe('test@example.com');
     expect(next).toHaveBeenCalled();
   });
 });

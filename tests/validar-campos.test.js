@@ -32,7 +32,7 @@ describe('Middleware validarCampos', () => {
     validationResult.mockReturnValue({
       isEmpty: () => false,
       mapped: () => ({
-        correo: { msg: 'El correo es obligatorio' }
+        email: { msg: 'El email es obligatorio' }
       })
     });
 
@@ -42,7 +42,7 @@ describe('Middleware validarCampos', () => {
     expect(res.json).toHaveBeenCalledWith({
       ok: false,
       errors: {
-        correo: { msg: 'El correo es obligatorio' }
+        email: { msg: 'El email es obligatorio' }
       }
     });
     expect(next).not.toHaveBeenCalled();

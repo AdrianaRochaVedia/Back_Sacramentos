@@ -11,7 +11,7 @@ const getUsuarios = async (req, res) => {
         const limit = parseInt(req.query.limit) || 10;
         const offset = (page - 1) * limit;
         const { count, rows } = await Usuario.findAndCountAll({
-            where: { isDeleted: false },
+            where: { activo: true },
             offset,
             limit
         });
@@ -61,65 +61,81 @@ const getAllUsuarios = async (req, res) => {
 
 
 const crearUsuario = async (req, res) => {
-    const { nombre, correo, contrasenia, tipo } = req.body;
-    try {
-      // Verificar si existe el correo
-      const existe = await Usuario.findOne({ where: { correo } });
-      if (existe) {
-        return res.status(400).json({ ok: false, msg: 'El correo ya está registrado' });
-      }
-  
-      // Encriptar contraseña antes de crear el usuario
-      const salt = bcrypt.genSaltSync();
-      const contraseniaHasheada = bcrypt.hashSync(contrasenia, salt);
-  
-      const usuario = await Usuario.create({
-        nombre,
-        correo,
-        contrasenia: contraseniaHasheada,
-        tipo,
-        isDeleted: false
-      });
-  
-      const token = await generarJWT(usuario.id_usuario, usuario.correo);
-      console.log(decode(token, { complete: true }));
-      res.status(201).json({
-        ok: true,
-        uid: usuario.id_usuario,
-        nombre: usuario.nombre,
-        correo: usuario.correo,
-      
-        token
-      });
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ ok: false, msg: 'Hable con el administrador' });
+  const { nombre, apellido_paterno, apellido_materno, email, password, fecha_nacimiento, rol } = req.body;
+
+  try {
+    const existe = await Usuario.findOne({ where: { email } });
+    if (existe) {
+      return res.status(400).json({ ok: false, msg: 'El email ya está registrado' });
     }
-  };
-  
+
+    //Hashear la password
+    const salt = bcrypt.genSaltSync();
+    const passwordHasheada = bcrypt.hashSync(password, salt);
+
+    const usuario = await Usuario.create({
+      nombre,
+      apellido_paterno,
+      apellido_materno,
+      email,
+      password: passwordHasheada,
+      fecha_nacimiento,
+      rol,
+    });
+
+    const token = await generarJWT(usuario.id_usuario, usuario.email);
+
+    res.status(201).json({
+      ok: true,
+      usuario: {
+        id_usuario: usuario.id_usuario,
+        nombre: usuario.nombre,
+        apellido_paterno: usuario.apellido_paterno,
+        apellido_materno: usuario.apellido_materno,
+        email: usuario.email,
+        fecha_nacimiento: usuario.fecha_nacimiento,
+        activo: usuario.activo,
+        rol: usuario.rol,
+      },
+      token,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false, msg: 'Hable con el administrador' });
+  }
+};
+
 
 //Login de usuario
 const loginUsuario = async (req, res) => {
-    const { correo, contrasenia } = req.body;
+    const { email, password } = req.body;
     try {
-      const usuario = await Usuario.findOne({ where: { correo, isDeleted: false } });
+      const usuario = await Usuario.findOne({ where: { email, activo: true } });
       if (!usuario) {
         return res.status(400).json({ ok: false, msg: 'Usuario no existe' });
       }
 
-      const valid = bcrypt.compareSync(contrasenia, usuario.contrasenia);
-      if (!valid) {
-        return res.status(400).json({ ok: false, msg: 'Contraseña incorrecta' });
-      }
+      // Verificar si el usuario esta activo
+    if (!usuario.activo) {
+      return res.status(400).json({ ok: false, msg: 'El usuario está inactivo' });
+    }
+
+
+    const valid = bcrypt.compareSync(password, usuario.password);
+    if (!valid) {
+      return res.status(400).json({ ok: false, msg: 'Contraseña incorrecta' });
+    }
 
       //Generar el token
-      const token = await generarJWT(usuario.id_usuario, usuario.correo);
+      const token = await generarJWT(usuario.id_usuario, usuario.email);
       console.log(decode(token, { complete: true }));
       
       res.json({
         ok: true,
         uid: usuario.id_usuario,
-        correo: usuario.correo,
+        email: usuario.email,
+        nombre: usuario.nombre,
+        rol: usuario.rol,
         token
       });
     } catch (err) {
@@ -133,7 +149,7 @@ const getUsuario = async (req, res) => {
     const { id } = req.params;
     try {
       const usuario = await Usuario.findOne({
-        where: { id_usuario: id, isDeleted: false }
+        where: { id_usuario: id, activo: true }
       });
       if (!usuario) {
         return res.status(404).json({ ok: false, msg: 'Usuario no encontrado' });
@@ -146,9 +162,9 @@ const getUsuario = async (req, res) => {
   };
   
   const revalidarToken = async (req, res) => {
-    const { uid, correo } = req; // Accede directamente desde req
+    const { uid, email } = req; // Accede directamente desde req
 
-    if (!uid || !correo) {
+    if (!uid || !email) {
         return res.status(400).json({
             ok: false,
             msg: 'Faltan datos del usuario'
@@ -156,8 +172,8 @@ const getUsuario = async (req, res) => {
     }
 
     try {
-        const token = await generarJWT(uid, correo);
-        res.json({ ok: true, uid, correo, token });
+        const token = await generarJWT(uid, email);
+        res.json({ ok: true, uid, email, token });
     } catch (error) {
         console.log(error);
         res.status(500).json({
@@ -170,11 +186,11 @@ const getUsuario = async (req, res) => {
 //Funcion para editar al usuario
 const actualizarUsuario = async (req, res = response) => {
     const { id } = req.params;
-    const { nombre,correo,tipo } = req.body;
+    const { nombre, apellido_paterno, apellido_materno, email, password, fecha_nacimiento, rol } = req.body;
 
     try {
         const usuario = await Usuario.findOne({
-            where: { id_usuario: id, isDeleted: false }
+            where: { id_usuario: id, activo: true }
         });
 
         if (!usuario) {
@@ -183,23 +199,31 @@ const actualizarUsuario = async (req, res = response) => {
                 msg: 'Usuario no encontrado'
             });
         }
-        // Actualizar campos
-        await usuario.update({
-            tipo,
-            nombre,
-            correo,
-        });
+        if (email && email !== usuario.email) {
+          const yaExiste = await Usuario.findOne({ where: { email } });
+          if (yaExiste) return res.status(400).json({ ok:false, msg:'El email ya está en uso' });
+        }
+        
+        const updates = {};
+        if (nombre !== undefined) updates.nombre = nombre;
+        if (apellido_paterno !== undefined) updates.apellido_paterno = apellido_paterno;
+        if (apellido_materno !== undefined) updates.apellido_materno = apellido_materno;
+        if (email !== undefined) updates.email = email;
+        if (fecha_nacimiento !== undefined) updates.fecha_nacimiento = fecha_nacimiento;
+        if (rol !== undefined) updates.rol = rol;
 
-        res.json({
-            ok: true,
-            usuario
-        });
-    } catch (error) {
-        console.error('Error al actualizar el usuario:', error);
-        res.status(500).json({
-            ok: false,
-            msg: 'Error al actualizar el usuario'
-        });
+        if (password) {
+          const salt = bcrypt.genSaltSync();
+          updates.password = bcrypt.hashSync(password, salt);
+        }
+
+        await usuario.update(updates);
+
+      const { password: _, ...usuarioPlano } = usuario.get({ plain:true });
+      res.json({ ok:true, usuario: usuarioPlano });
+    } catch (e) {
+      console.error('Error al actualizar el usuario:', e);
+      res.status(500).json({ ok:false, msg:'Error al actualizar el usuario' });
     }
 };
 
@@ -209,7 +233,7 @@ const eliminarUsuario = async (req, res = response) => {
 
     try {
         const usuario = await Usuario.findOne({
-            where: { id_usuario: id, isDeleted: false }
+            where: { id_usuario: id, activo: true }
         });
 
         if (!usuario) {
@@ -219,7 +243,7 @@ const eliminarUsuario = async (req, res = response) => {
             });
         }
         
-        await usuario.update({ isDeleted: true });
+        await usuario.update({ activo: false });
 
         res.json({
             ok: true,

@@ -9,8 +9,8 @@ describe('Autenticación', () => {
       .post('/api/usuarios/new')
       .send({
         nombre: 'Juan6 Test ',
-        correo: 'juan6@test.com',
-        contrasenia: 'StrongPass123!',
+        email: 'juan6@test.com',
+        password: 'StrongPass123!',
         tipo: 'admin'
       });
 
@@ -21,8 +21,8 @@ describe('Autenticación', () => {
     const res = await request(app)
       .post('/api/usuarios')
       .send({
-        correo: 'juan4@test.com',
-        contrasenia: 'StrongPass123!'
+        email: 'juan4@test.com',
+        password: 'StrongPass123!'
       });
 
     expect(res.statusCode).toBe(200);
