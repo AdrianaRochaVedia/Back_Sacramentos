@@ -1,6 +1,6 @@
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../database/config');
-const Documento = require('./Documento');
+const Documento = require('./Sacramento');
 
 const VersionDocumento = sequelize.define('VersionDocumento', {
   id_version: {

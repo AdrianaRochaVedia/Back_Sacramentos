@@ -1,5 +1,5 @@
 const Propuesta = require('../models/Propuesta');
-const Documento = require('../models/Documento');
+const Documento = require('../models/Sacramento');
 
 // Crear un nuevo comentario
 const crearPropuesta = async (req, res) => {

@@ -1,6 +1,6 @@
 const { response } = require('express');
 const { Op, literal, fn, col } = require('sequelize');
-const Documento = require('../models/Documento');
+const Documento = require('../models/Sacramento');
 const VersionDocumento = require('../models/VersionDocumento');
 const { validarCampos } = require('../middlewares/validar-campos');
 
