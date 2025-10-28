@@ -154,7 +154,7 @@ app.use('/api/documentacion', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
 // Routes
 app.use('/api/usuarios', require('./routes/usuarios'));
 app.use('/api/personas', require('./routes/personas'));
-app.use('/api/tiposacramento', require('./routes/tiposacramentos'));
+app.use('/api/parroquias', require('./routes/parroquias'));
 app.use('/api/comentarios', require('./routes/comentarios'));
 app.use('/api/propuestas', require('./routes/propuesta'));
 
