@@ -155,7 +155,7 @@ app.use('/api/documentacion', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
 app.use('/api/usuarios', require('./routes/usuarios'));
 app.use('/api/personas', require('./routes/personas'));
 app.use('/api/parroquias', require('./routes/parroquias'));
-app.use('/api/comentarios', require('./routes/comentarios'));
+app.use('/api/rolsacramentos', require('./routes/rolsacramentos'));
 app.use('/api/propuestas', require('./routes/propuesta'));
 
 app.get('/api/proxy-pdf', async (req, res) => {
