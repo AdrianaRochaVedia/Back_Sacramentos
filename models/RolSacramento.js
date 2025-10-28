@@ -2,8 +2,8 @@
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../database/config');
 
-const TipoSacramento = sequelize.define('TipoSacramento', {
-  id_tipo: {
+const RolSacramento = sequelize.define('RolSacramento', {
+  id_rol_sacra: {
     type: DataTypes.INTEGER,
     primaryKey: true,
     autoIncrement: true,
@@ -13,14 +13,9 @@ const TipoSacramento = sequelize.define('TipoSacramento', {
     type: DataTypes.STRING(100),
     allowNull: false
   },
-  descripcion: {
-    type: DataTypes.TEXT,
-    allowNull: false
-  }
-
 }, {
-  tableName: 'tipo_sacramento',
+  tableName: 'rol_sacramento',
   timestamps: false
 });
 
-module.exports = TipoSacramento;
+module.exports = RolSacramento;

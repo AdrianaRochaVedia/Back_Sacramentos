@@ -1,8 +1,5 @@
 const { response } = require('express');
-const bcrypt = require('bcryptjs');
 const Persona = require('../models/Persona');
-const { generarJWT } = require('../helpers/jwt');
-const decode = require('jsonwebtoken/decode');
 
 // Obtener todos los personas activos
 const getPersonas = async (req, res) => {
@@ -102,58 +99,21 @@ const crearPersona = async (req, res) => {
 };
 
 
-//Login de usuario
-const loginUsuario = async (req, res) => {
-    const { email, password } = req.body;
-    try {
-      const usuario = await Usuario.findOne({ where: { email, activo: true } });
-      if (!usuario) {
-        return res.status(400).json({ ok: false, msg: 'Usuario no existe' });
-      }
 
-      // Verificar si el usuario esta activo
-    if (!usuario.activo) {
-      return res.status(400).json({ ok: false, msg: 'El usuario está inactivo' });
-    }
-
-
-    const valid = bcrypt.compareSync(password, usuario.password);
-    if (!valid) {
-      return res.status(400).json({ ok: false, msg: 'Contraseña incorrecta' });
-    }
-
-      //Generar el token
-      const token = await generarJWT(usuario.id_usuario, usuario.email);
-      console.log(decode(token, { complete: true }));
-      
-      res.json({
-        ok: true,
-        uid: usuario.id_usuario,
-        email: usuario.email,
-        nombre: usuario.nombre,
-        rol: usuario.rol,
-        token
-      });
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ ok: false, msg: 'Hable con el administrador' });
-    }
-  };
-
-// Obtener un usuario por ID
-const getUsuario = async (req, res) => {
+// Obtener una persona por ID
+const getPersona = async (req, res) => {
     const { id } = req.params;
     try {
-      const usuario = await Usuario.findOne({
-        where: { id_usuario: id, activo: true }
+      const persona = await Persona.findOne({
+        where: { id_persona: id, activo: true }
       });
-      if (!usuario) {
-        return res.status(404).json({ ok: false, msg: 'Usuario no encontrado' });
+      if (!persona) {
+        return res.status(404).json({ ok: false, msg: 'Persona no encontrada' });
       }
-      res.json({ ok: true, usuario });
+      res.json({ ok: true, persona });
     } catch (err) {
       console.error(err);
-      res.status(500).json({ ok: false, msg: 'Error al obtener usuario' });
+      res.status(500).json({ ok: false, msg: 'Error al obtener persona' });
     }
   };
   
@@ -163,7 +123,7 @@ const getUsuario = async (req, res) => {
     if (!uid || !email) {
         return res.status(400).json({
             ok: false,
-            msg: 'Faltan datos del usuario'
+            msg: 'Faltan datos de la persona'
         });
     }
 
@@ -179,71 +139,90 @@ const getUsuario = async (req, res) => {
     }
 };
 
-//Funcion para editar al usuario
-const actualizarUsuario = async (req, res = response) => {
-    const { id } = req.params;
-    const { nombre, apellido_paterno, apellido_materno, email, password, fecha_nacimiento, rol } = req.body;
+//Funcion para editar a la persona
+const actualizarPersona = async (req, res) => {
+  const id = Number(req.params.id);
+  if (Number.isNaN(id)) {
+    return res.status(400).json({ ok:false, msg:'ID inválido' });
+  }
 
-    try {
-        const usuario = await Usuario.findOne({
-            where: { id_usuario: id, activo: true }
-        });
+  const {
+    nombre,
+    apellido_paterno,
+    apellido_materno,
+    carnet_identidad,
+    fecha_nacimiento,
+    lugar_nacimiento,
+    nombre_padre,
+    nombre_madre,
+    estado
+  } = req.body;
 
-        if (!usuario) {
-            return res.status(404).json({
-                ok: false,
-                msg: 'Usuario no encontrado'
-            });
-        }
-        if (email && email !== usuario.email) {
-          const yaExiste = await Usuario.findOne({ where: { email } });
-          if (yaExiste) return res.status(400).json({ ok:false, msg:'El email ya está en uso' });
-        }
-        
-        const updates = {};
-        if (nombre !== undefined) updates.nombre = nombre;
-        if (apellido_paterno !== undefined) updates.apellido_paterno = apellido_paterno;
-        if (apellido_materno !== undefined) updates.apellido_materno = apellido_materno;
-        if (email !== undefined) updates.email = email;
-        if (fecha_nacimiento !== undefined) updates.fecha_nacimiento = fecha_nacimiento;
-        if (rol !== undefined) updates.rol = rol;
+  try {
+    const persona = await Persona.findOne({
+      where: { id_persona: id, activo: true }
+    });
 
-        if (password) {
-          const salt = bcrypt.genSaltSync();
-          updates.password = bcrypt.hashSync(password, salt);
-        }
-
-        await usuario.update(updates);
-
-      const { password: _, ...usuarioPlano } = usuario.get({ plain:true });
-      res.json({ ok:true, usuario: usuarioPlano });
-    } catch (e) {
-      console.error('Error al actualizar el usuario:', e);
-      res.status(500).json({ ok:false, msg:'Error al actualizar el usuario' });
+    if (!persona) {
+      return res.status(404).json({ ok:false, msg:'Persona no encontrada' });
     }
+
+    if (carnet_identidad && carnet_identidad !== persona.carnet_identidad) {
+      const yaExiste = await Persona.findOne({ where: { carnet_identidad } });
+      if (yaExiste) {
+        return res.status(400).json({ ok:false, msg:'El carnet de identidad ya está en uso' });
+      }
+    }
+    const updates = {};
+    if (nombre !== undefined) updates.nombre = nombre;
+    if (apellido_paterno !== undefined) updates.apellido_paterno = apellido_paterno;
+    if (apellido_materno !== undefined) updates.apellido_materno = apellido_materno;
+    if (carnet_identidad !== undefined) updates.carnet_identidad = carnet_identidad;
+    if (fecha_nacimiento !== undefined) updates.fecha_nacimiento = fecha_nacimiento; // YYYY-MM-DD
+    if (lugar_nacimiento !== undefined) updates.lugar_nacimiento = lugar_nacimiento;
+    if (nombre_padre !== undefined) updates.nombre_padre = nombre_padre;
+    if (nombre_madre !== undefined) updates.nombre_madre = nombre_madre;
+    if (estado !== undefined) updates.estado = estado;
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ ok:false, msg:'No se enviaron campos a actualizar' });
+    }
+
+    const personaActualizada = await persona.update(updates);
+
+    return res.json({
+      ok: true,
+      persona: personaActualizada.get({ plain: true })
+    });
+
+  } catch (e) {
+    console.error('Error al actualizar la persona:', e);
+    return res.status(500).json({ ok:false, msg:'Error al actualizar la persona' });
+  }
 };
 
-// Eliminado lógico de un usuario
-const eliminarUsuario = async (req, res = response) => {
+
+// Eliminado lógico de un persona
+const eliminarPersona = async (req, res = response) => {
     const { id } = req.params;
 
     try {
-        const usuario = await Usuario.findOne({
-            where: { id_usuario: id, activo: true }
+        const persona = await Persona.findOne({
+            where: { id_persona: id, activo: true }
         });
 
-        if (!usuario) {
+        if (!persona) {
             return res.status(404).json({
                 ok: false,
-                msg: 'Usuario no encontrado'
+                msg: 'Persona no encontrada'
             });
         }
-        
-        await usuario.update({ activo: false });
+
+        await persona.update({ activo: false });
 
         res.json({
             ok: true,
-            msg: 'Usuario eliminado correctamente'
+            msg: 'Persona eliminada correctamente'
         });
     } catch (error) {
         console.error('Error al eliminar el usuario:', error);
@@ -255,12 +234,10 @@ const eliminarUsuario = async (req, res = response) => {
 };
 
   module.exports = {
-    getUsuarios,
-    crearUsuario,
-    loginUsuario,
-    getUsuario,
-    revalidarToken,
-    actualizarUsuario,
-    eliminarUsuario,
-    getAllUsuarios
+    getPersonas,
+    crearPersona,
+    getPersona,
+    actualizarPersona,
+    eliminarPersona,
+    getAllPersonas
   };

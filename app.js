@@ -153,7 +153,7 @@ app.use('/api/documentacion', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
 
 // Routes
 app.use('/api/usuarios', require('./routes/usuarios'));
-app.use('/api/documentos', require('./routes/documentos'));
+app.use('/api/personas', require('./routes/personas'));
 app.use('/api/versiones', require('./routes/versionDocumentos'));
 app.use('/api/comentarios', require('./routes/comentarios'));
 app.use('/api/propuestas', require('./routes/propuesta'));
