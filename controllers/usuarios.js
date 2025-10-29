@@ -3,6 +3,8 @@ const bcrypt = require('bcryptjs');
 const Usuario = require('../models/Usuario');
 const { generarJWT } = require('../helpers/jwt');
 const decode = require('jsonwebtoken/decode');
+const { combinarCondiciones } = require('../middlewares/busqueda');
+
 
 // Obtener todos los usuarios activos
 const getUsuarios = async (req, res) => {
@@ -10,10 +12,46 @@ const getUsuarios = async (req, res) => {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const offset = (page - 1) * limit;
+        
+        const { 
+            search,
+            nombre,
+            apellido_paterno,
+            apellido_materno,
+            email,
+            fecha_nacimiento,
+            rol,
+            activo
+        } = req.query;
+  
+
+        const camposBusqueda = [
+            'nombre',
+            'apellido_paterno',
+            'apellido_materno',
+            'email',
+            'fecha_nacimiento',
+            'rol'
+        ];
+        
+
+        const filtros = {
+            nombre,
+            apellido_paterno,
+            apellido_materno,
+            email,
+            fecha_nacimiento,
+            rol,
+            activo: activo !== undefined ? activo : true
+        };
+        
+        const whereConditions = combinarCondiciones(search, camposBusqueda, filtros);
+
         const { count, rows } = await Usuario.findAndCountAll({
-            where: { activo: true },
+            where: whereConditions,
             offset,
-            limit
+            limit,
+            order: [['apellido_paterno', 'ASC'], ['apellido_materno', 'ASC'], ['nombre', 'ASC'], ['rol', 'ASC'], ['email', 'ASC']]
         });
 
         res.json({
@@ -21,8 +59,19 @@ const getUsuarios = async (req, res) => {
             usuarios: rows,
             totalItems: count,
             totalPages: Math.ceil(count / limit),
-            currentPage: page
+            currentPage: page,
+            filtros_aplicados: {
+                search,
+                nombre,
+                apellido_paterno,
+                apellido_materno,
+                email,
+                fecha_nacimiento,
+                rol,
+                activo
+            }
         });
+
     } catch (error) {
         console.error(error);
         res.status(500).json({
