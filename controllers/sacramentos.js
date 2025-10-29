@@ -1,13 +1,13 @@
 const { response } = require('express');
 const Sacramento = require('../models/Sacramento');
 
-// Obtener todos los personas activos
-const getPersonas = async (req, res) => {
+// Obtener todos los sacramentos activos
+const getSacramentos = async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const offset = (page - 1) * limit;
-        const { count, rows } = await Persona.findAndCountAll({
+        const { count, rows } = await Sacramento.findAndCountAll({
             where: { activo: true },
             offset,
             limit
@@ -15,7 +15,7 @@ const getPersonas = async (req, res) => {
 
         res.json({
             ok: true,
-            personas: rows,
+            sacramento: rows,
             totalItems: count,
             totalPages: Math.ceil(count / limit),
             currentPage: page
@@ -24,25 +24,25 @@ const getPersonas = async (req, res) => {
         console.error(error);
         res.status(500).json({
             ok: false,
-            msg: 'Error al obtener los personas'
+            msg: 'Error al obtener los sacramentos'
         });
     }
 };
 
-// Obtener todos los personas (incluidos los eliminados)
-const getAllPersonas = async (req, res) => {
+// Obtener todos los sacramentos (incluidos los eliminados)
+const getAllSacramentos = async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const offset = (page - 1) * limit;
-        const { count, rows } = await Persona.findAndCountAll({
+        const { count, rows } = await Sacramento.findAndCountAll({
             offset,
             limit
         });
 
         res.json({
             ok: true,
-            personas: rows,
+            sacramento: rows,
             totalItems: count,
             totalPages: Math.ceil(count / limit),
             currentPage: page
@@ -51,193 +51,142 @@ const getAllPersonas = async (req, res) => {
         console.error(error);
         res.status(500).json({
             ok: false,
-            msg: 'Error al obtener todos las personas'
+            msg: 'Error al obtener todos los sacramentos'
         });
     }
 };
 
 
-const crearPersona = async (req, res) => {
-  const { nombre, apellido_paterno, apellido_materno, carnet_identidad, fecha_nacimiento, lugar_nacimiento, nombre_padre, nombre_madre, estado } = req.body;
+const crearSacramento = async (req, res) => {
+  const { fecha_sacramento, foja, numero, usuario_id_usuario, institucion_parroquia_id_parroquia, tipo_sacramento_id_tipo } = req.body;
 
   try {
-    const existe = await Persona.findOne({ where: { carnet_identidad } });
-    if (existe) {
-      return res.status(400).json({ ok: false, msg: 'El carnet de identidad ya está registrado' });
-    }
-
-    const persona = await Persona.create({
-      nombre,
-      apellido_paterno,
-      apellido_materno,
-      carnet_identidad,
-      fecha_nacimiento,
-      lugar_nacimiento,
-      nombre_padre,
-      nombre_madre,
-      estado
+    const sacramento = await Sacramento.create({
+      fecha_sacramento,
+      foja,
+      numero,
+      usuario_id_usuario,
+      institucion_parroquia_id_parroquia,
+      tipo_sacramento_id_tipo
     });
     res.status(201).json({
       ok: true,
-      persona: {
-        id_persona: persona.id_persona,
-        nombre: persona.nombre,
-        apellido_paterno: persona.apellido_paterno,
-        apellido_materno: persona.apellido_materno,
-        carnet_identidad: persona.carnet_identidad,
-        fecha_nacimiento: persona.fecha_nacimiento,
-        lugar_nacimiento: persona.lugar_nacimiento,
-        nombre_padre: persona.nombre_padre,
-        nombre_madre: persona.nombre_madre,
-        estado: persona.estado
-      },
+      sacramento
     });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ ok: false, msg: 'Hable con el administrador' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      ok: false,
+      msg: 'Error al crear el sacramento'
+    });
   }
 };
 
-
-
-// Obtener una persona por ID
-const getPersona = async (req, res) => {
+// Obtener un sacramento por ID
+const getSacramento = async (req, res) => {
     const { id } = req.params;
     try {
-      const persona = await Persona.findOne({
-        where: { id_persona: id, activo: true }
+      const sacramento = await Sacramento.findOne({
+        where: { id_sacramento: id, activo: true }
       });
-      if (!persona) {
-        return res.status(404).json({ ok: false, msg: 'Persona no encontrada' });
+      if (!sacramento) {
+        return res.status(404).json({ ok: false, msg: 'Sacramento no encontrado' });
       }
-      res.json({ ok: true, persona });
+      res.json({ ok: true, sacramento });
     } catch (err) {
       console.error(err);
-      res.status(500).json({ ok: false, msg: 'Error al obtener persona' });
+      res.status(500).json({ ok: false, msg: 'Error al obtener sacramento' });
     }
   };
-  
-  const revalidarToken = async (req, res) => {
-    const { uid, email } = req; // Accede directamente desde req
-
-    if (!uid || !email) {
-        return res.status(400).json({
-            ok: false,
-            msg: 'Faltan datos de la persona'
-        });
-    }
-
-    try {
-        const token = await generarJWT(uid, email);
-        res.json({ ok: true, uid, email, token });
-    } catch (error) {
-        console.log(error);
-        res.status(500).json({
-            ok: false,
-            msg: 'Error al generar el token'
-        });
-    }
-};
 
 //Funcion para editar a la persona
-const actualizarPersona = async (req, res) => {
+const actualizarSacramento = async (req, res) => {
   const id = Number(req.params.id);
   if (Number.isNaN(id)) {
     return res.status(400).json({ ok:false, msg:'ID inválido' });
   }
 
   const {
-    nombre,
-    apellido_paterno,
-    apellido_materno,
-    carnet_identidad,
-    fecha_nacimiento,
-    lugar_nacimiento,
-    nombre_padre,
-    nombre_madre,
-    estado
+    fecha_sacramento,
+    foja,
+    numero,
+    usuario_id_usuario,
+    institucion_parroquia_id_parroquia,
+    tipo_sacramento_id_tipo
   } = req.body;
 
+
   try {
-    const persona = await Persona.findOne({
-      where: { id_persona: id, activo: true }
+    const sacramento = await Sacramento.findOne({
+      where: { id_sacramento: id, activo: true }
     });
 
-    if (!persona) {
-      return res.status(404).json({ ok:false, msg:'Persona no encontrada' });
+    if (!sacramento) {
+      return res.status(404).json({ ok:false, msg:'Sacramento no encontrado' });
     }
 
-    if (carnet_identidad && carnet_identidad !== persona.carnet_identidad) {
-      const yaExiste = await Persona.findOne({ where: { carnet_identidad } });
-      if (yaExiste) {
-        return res.status(400).json({ ok:false, msg:'El carnet de identidad ya está en uso' });
-      }
-    }
     const updates = {};
-    if (nombre !== undefined) updates.nombre = nombre;
-    if (apellido_paterno !== undefined) updates.apellido_paterno = apellido_paterno;
-    if (apellido_materno !== undefined) updates.apellido_materno = apellido_materno;
-    if (carnet_identidad !== undefined) updates.carnet_identidad = carnet_identidad;
-    if (fecha_nacimiento !== undefined) updates.fecha_nacimiento = fecha_nacimiento; // YYYY-MM-DD
-    if (lugar_nacimiento !== undefined) updates.lugar_nacimiento = lugar_nacimiento;
-    if (nombre_padre !== undefined) updates.nombre_padre = nombre_padre;
-    if (nombre_madre !== undefined) updates.nombre_madre = nombre_madre;
-    if (estado !== undefined) updates.estado = estado;
+    if (fecha_sacramento !== undefined) updates.fecha_sacramento = fecha_sacramento;
+    if (foja !== undefined) updates.foja = foja;
+    if (numero !== undefined) updates.numero = numero;
+    if (usuario_id_usuario !== undefined) updates.usuario_id_usuario = usuario_id_usuario;
+    if (institucion_parroquia_id_parroquia !== undefined) updates.institucion_parroquia_id_parroquia = institucion_parroquia_id_parroquia;
+    if (tipo_sacramento_id_tipo !== undefined) updates.tipo_sacramento_id_tipo = tipo_sacramento_id_tipo;
 
     if (Object.keys(updates).length === 0) {
       return res.status(400).json({ ok:false, msg:'No se enviaron campos a actualizar' });
     }
 
-    const personaActualizada = await persona.update(updates);
+    const sacramentoActualizado = await sacramento.update(updates);
 
     return res.json({
       ok: true,
-      persona: personaActualizada.get({ plain: true })
+      sacramento: sacramentoActualizado.get({ plain: true })
     });
 
   } catch (e) {
-    console.error('Error al actualizar la persona:', e);
-    return res.status(500).json({ ok:false, msg:'Error al actualizar la persona' });
+    console.error('Error al actualizar el sacramento:', e);
+    return res.status(500).json({ ok:false, msg:'Error al actualizar el sacramento' });
   }
 };
 
 
-// Eliminado lógico de un persona
-const eliminarPersona = async (req, res = response) => {
+// Eliminado lógico de un sacramento
+const eliminarSacramento = async (req, res = response) => {
     const { id } = req.params;
 
     try {
-        const persona = await Persona.findOne({
-            where: { id_persona: id, activo: true }
+        const sacramento = await Sacramento.findOne({
+            where: { id_sacramento: id, activo: true }
         });
 
-        if (!persona) {
+        if (!sacramento) {
             return res.status(404).json({
                 ok: false,
-                msg: 'Persona no encontrada'
+                msg: 'Sacramento no encontrado'
             });
         }
 
-        await persona.update({ activo: false });
+        await sacramento.update({ activo: false });
 
         res.json({
             ok: true,
-            msg: 'Persona eliminada correctamente'
+            msg: 'Sacramento eliminado correctamente'
         });
     } catch (error) {
-        console.error('Error al eliminar el usuario:', error);
+        console.error('Error al eliminar el sacramento:', error);
         res.status(500).json({
             ok: false,
-            msg: 'Error al eliminar el usuario'
+            msg: 'Error al eliminar el sacramento'
         });
     }
 };
 
   module.exports = {
-    getPersonas,
-    crearPersona,
-    getPersona,
-    actualizarPersona,
-    eliminarPersona,
-    getAllPersonas
+    getSacramentos,
+    crearSacramento,
+    getSacramento,
+    actualizarSacramento,
+    eliminarSacramento,
+    getAllSacramentos
   };

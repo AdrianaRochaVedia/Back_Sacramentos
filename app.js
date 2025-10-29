@@ -156,7 +156,10 @@ app.use('/api/usuarios', require('./routes/usuarios'));
 app.use('/api/personas', require('./routes/personas'));
 app.use('/api/parroquias', require('./routes/parroquias'));
 app.use('/api/rolsacramentos', require('./routes/rolsacramentos'));
-app.use('/api/propuestas', require('./routes/propuesta'));
+app.use('/api/tiposacramentos', require('./routes/tiposacramentos'));
+app.use('/api/sacramentos', require('./routes/sacramentos'));
+app.use('/api/matrimoniodetalles', require('./routes/matrimoniodetalles'));
+
 
 app.get('/api/proxy-pdf', async (req, res) => {
   try {
