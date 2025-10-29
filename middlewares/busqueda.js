@@ -15,7 +15,7 @@ const generarCondicionesBusqueda = (searchTerm, camposBusqueda) => {
   }));
 
   const condicionesUnaccent = camposBusqueda.map(campo => 
-    literal(`unaccent(LOWER(${campo})) LIKE unaccent(LOWER('%${terminoNormalizado}%'))`)
+    literal(`unaccent(LOWER(CAST(${campo} AS TEXT))) LIKE unaccent(LOWER('%${terminoNormalizado}%'))`)
   );
 
   return {
@@ -35,7 +35,7 @@ const generarCondicionesBusquedaDifusa = (searchTerm, camposBusqueda, umbralSimi
   const terminoNormalizado = searchTerm.trim().toLowerCase();
   
   const condicionesSimilitud = camposBusqueda.map(campo => 
-    literal(`similarity(unaccent(LOWER(${campo})), unaccent(LOWER('${terminoNormalizado}'))) > ${umbralSimilitud}`)
+    literal(`similarity(unaccent(LOWER(CAST(${campo} AS TEXT))), unaccent(LOWER('${terminoNormalizado}'))) > ${umbralSimilitud}`)
   );
 
   return {
@@ -46,50 +46,82 @@ const generarCondicionesBusquedaDifusa = (searchTerm, camposBusqueda, umbralSimi
 const generarCondicionesFiltrado = (filtros) => {
   const where = {};
 
+  const camposFecha = [
+    'fecha_nacimiento',
+    'fecha_sacramento',
+    'fecha_registro',
+    'fecha_actualizacion'
+  ];
+
+  const camposNumericos = [
+    'numero',
+    'numero_acta'
+  ];
+
   Object.keys(filtros).forEach(key => {
     const valor = filtros[key];
     
     if (valor === null || valor === undefined || valor === '') {
       return;
     }
-
     if (key.endsWith('_desde')) {
       const campoBase = key.replace('_desde', '');
       if (!where[campoBase]) {
         where[campoBase] = {};
       }
       where[campoBase][Op.gte] = valor;
+      return; 
     } 
-    else if (key.endsWith('_hasta')) {
+    
+    if (key.endsWith('_hasta')) {
       const campoBase = key.replace('_hasta', '');
       if (!where[campoBase]) {
         where[campoBase] = {};
       }
       where[campoBase][Op.lte] = valor;
+      return; 
     }
 
-    else if (typeof valor === 'boolean' || valor === 'true' || valor === 'false') {
+    if (typeof valor === 'boolean' || valor === 'true' || valor === 'false') {
       where[key] = valor === 'true' || valor === true;
+      return;
     }
-
-    else if (Array.isArray(valor)) {
+    if (Array.isArray(valor)) {
       where[key] = {
         [Op.in]: valor
       };
+      return;
+    }
+    if (camposFecha.includes(key)) {
+      where[key] = valor;
+      return;
     }
 
-    else if (!isNaN(valor) && key.includes('_id')) {
-      where[key] = parseInt(valor);
+    if (camposNumericos.includes(key)) {
+      const numeroParseado = parseInt(valor);
+      if (!isNaN(numeroParseado)) {
+        where[key] = numeroParseado;
+      }
+      return;
     }
 
-    else if (typeof valor === 'string') {
+    if (key.includes('_id') || key.startsWith('id_')) {
+      const idParseado = parseInt(valor);
+      if (!isNaN(idParseado)) {
+        where[key] = idParseado;
+      }
+      return;
+    }
+
+    if (typeof valor === 'string') {
       where[key] = {
         [Op.iLike]: `%${valor}%`
       };
+      return;
     }
-    else {
-      where[key] = valor;
-    }
+
+    // Default
+    where[key] = valor;
   });
 
   return where;

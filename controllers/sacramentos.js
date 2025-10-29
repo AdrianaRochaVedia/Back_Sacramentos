@@ -1,30 +1,98 @@
 const { response } = require('express');
 const Sacramento = require('../models/Sacramento');
+const TipoSacramento = require('../models/TipoSacramento');  
+const Parroquia = require('../models/Parroquia');           
+const Usuario = require('../models/Usuario');
+const { combinarCondiciones } = require('../middlewares/busqueda');
+
 
 // Obtener todos los sacramentos activos
-const getSacramentos = async (req, res) => {
+const getSacramentos = async (req, res = response) => {
     try {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const offset = (page - 1) * limit;
+        
+        const { 
+            search,
+            fecha_sacramento,
+            fecha_registro,
+            fecha_actualizacion,
+            activo,
+            foja,
+            numero,
+            usuario_id_usuario,
+            institucion_parroquia_id_parroquia,
+            tipo_sacramento_id_tipo
+        } = req.query;
+  
+        const camposBusqueda = [
+            'foja'  
+        ];
+        
+        const filtros = {
+            fecha_sacramento,           
+            fecha_registro,
+            fecha_actualizacion,    
+            foja,                       
+            numero,                     
+            usuario_id_usuario,         
+            institucion_parroquia_id_parroquia, 
+            tipo_sacramento_id_tipo,    
+            activo: activo !== undefined ? activo : true
+        };
+        
+        const whereConditions = combinarCondiciones(search, camposBusqueda, filtros);
+
         const { count, rows } = await Sacramento.findAndCountAll({
-            where: { activo: true },
+            where: whereConditions,
+            include: [
+                {
+                    model: TipoSacramento,
+                    as: 'tipoSacramento',
+                    attributes: ['id_tipo', 'nombre', 'descripcion']
+                },
+                {
+                    model: Parroquia,
+                    as: 'parroquia',
+                    attributes: ['id_parroquia', 'nombre', 'direccion']
+                },
+                {
+                    model: Usuario,
+                    as: 'usuario',
+                    attributes: ['id_usuario', 'nombre', 'apellido_paterno', 'email']
+                }
+            ],
             offset,
-            limit
+            limit,
+            order: [['fecha_sacramento', 'DESC'], ['numero', 'DESC'], ['fecha_registro', 'DESC'], ['fecha_actualizacion', 'DESC']]
         });
 
         res.json({
             ok: true,
-            sacramento: rows,
+            sacramentos: rows,
             totalItems: count,
             totalPages: Math.ceil(count / limit),
-            currentPage: page
+            currentPage: page,
+            filtros_aplicados: {
+                search,
+                fecha_registro,
+                fecha_actualizacion,
+                foja,
+                numero,
+                usuario_id_usuario,
+                institucion_parroquia_id_parroquia,
+                tipo_sacramento_id_tipo,
+                activo
+            }
         });
+
     } catch (error) {
-        console.error(error);
+        console.error('Error en getSacramentos:', error);
         res.status(500).json({
             ok: false,
-            msg: 'Error al obtener los sacramentos'
+            msg: 'Error al obtener los sacramentos',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
