@@ -7,7 +7,7 @@ function sanitizeBody(body) {
   const seen = new WeakSet();
   const walk = (val) => {
     if (val && typeof val === 'object') {
-      if (seen.has(val)) return null; // evita ciclos
+      if (seen.has(val)) return null;
       seen.add(val);
       if (Array.isArray(val)) return val.map(walk);
       const out = {};
@@ -24,7 +24,7 @@ function sanitizeBody(body) {
   return walk(body);
 }
 
-const SKIP_PATHS = ['/api/auditoria']; // agrega healthchecks si quieres
+const SKIP_PATHS = ['/api/auditoria'];
 
 module.exports = function auditar() {
   return function (req, res, next) {
@@ -35,18 +35,16 @@ module.exports = function auditar() {
 
     const inicio = new Date();
 
-    // Usuario (ajústalo a tu middleware de JWT)
-    let username = null;
-    try {
-      username = req.usuario?.nombre || req.usuario?.email || null;
-    } catch (_) {}
+    // NO capturar username aquí - moverlo al finish
 
     const method = (req.method || 'GET').toUpperCase();
     const url = req.originalUrl || req.url || '/';
     const userAgent = req.headers['user-agent'] || null;
     const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim()
+           || req.headers['x-real-ip']
            || req.ip
            || req.socket?.remoteAddress
+           || req.connection?.remoteAddress
            || null;
 
     const applicationName = process.env.APP_NAME || 'Sacramentos';
@@ -59,6 +57,15 @@ module.exports = function auditar() {
       try {
         const fin = new Date();
         const duracion = fin.getTime() - inicio.getTime();
+        
+        let username = null;
+        try {
+          username = req.usuario?.nombre 
+                  || req.usuario?.email 
+                  || req.email
+                  || req.uid
+                  || null;
+        } catch (_) {}
 
         let reqBody = null;
         try {
