@@ -1,16 +1,61 @@
 const { response } = require('express');
 const Persona = require('../models/Persona');
+const { combinarCondiciones } = require('../middlewares/busqueda');
 
-// Obtener todos los personas activos
-const getPersonas = async (req, res) => {
+const getPersonas = async (req, res = response) => {
     try {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const offset = (page - 1) * limit;
+        
+        const { 
+            search,
+            nombre,
+            apellido_paterno,
+            apellido_materno,
+            carnet_identidad,
+            fecha_nacimiento,
+            lugar_nacimiento,
+            nombre_padre,
+            nombre_madre,
+            estado,
+            activo
+        } = req.query;
+  
+
+        const camposBusqueda = [
+            'nombre',
+            'apellido_paterno',
+            'apellido_materno',
+            'carnet_identidad',
+            'fecha_nacimiento',
+            'lugar_nacimiento',
+            'nombre_padre',
+            'nombre_madre',
+            'estado'
+        ];
+        
+
+        const filtros = {
+            nombre,
+            apellido_paterno,
+            apellido_materno,
+            carnet_identidad,
+            fecha_nacimiento,
+            lugar_nacimiento,
+            nombre_padre,
+            nombre_madre,
+            estado,
+            activo: activo !== undefined ? activo : true 
+        };
+        
+        const whereConditions = combinarCondiciones(search, camposBusqueda, filtros);
+
         const { count, rows } = await Persona.findAndCountAll({
-            where: { activo: true },
+            where: whereConditions,
             offset,
-            limit
+            limit,
+            order: [['apellido_paterno', 'ASC'], ['apellido_materno', 'ASC'], ['nombre', 'ASC']]
         });
 
         res.json({
@@ -18,13 +63,27 @@ const getPersonas = async (req, res) => {
             personas: rows,
             totalItems: count,
             totalPages: Math.ceil(count / limit),
-            currentPage: page
+            currentPage: page,
+            filtros_aplicados: {
+                search,
+                nombre,
+                apellido_paterno,
+                apellido_materno,
+                carnet_identidad,
+                fecha_nacimiento,
+                lugar_nacimiento,
+                nombre_padre,
+                nombre_madre,
+                estado,
+                activo
+            }
         });
     } catch (error) {
-        console.error(error);
+        console.error('Error en getPersonas:', error);
         res.status(500).json({
             ok: false,
-            msg: 'Error al obtener los personas'
+            msg: 'Error al obtener las personas',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
