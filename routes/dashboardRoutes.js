@@ -1,9 +1,9 @@
-const express = require('express');
-const router = express.Router();
-const { validarJWT } = require('../middlewares/validar-jwt');
-const { getDashboardStats } = require('../controllers/dashboard');
+const { Router } = require('express');
+const { getDashboardSummary } = require('../controllers/dashboard');
 
-// GET /api/dashboard/stats?fechaInicio=2020-01-01&fechaFin=2024-12-31&sacramentos[]=Bautismo&sacramentos[]=Matrimonio
-router.get('/stats', validarJWT, getDashboardStats);
+const router = Router();
+
+// Endpoint compacto con todo lo que pide el front
+router.get('/summary', getDashboardSummary);
 
 module.exports = router;
