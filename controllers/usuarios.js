@@ -69,9 +69,19 @@ const crearUsuario = async (req, res) => {
       return res.status(400).json({ ok: false, msg: 'El email ya está registrado' });
     }
 
-    //Hashear la password
-    const salt = bcrypt.genSaltSync();
-    const passwordHasheada = bcrypt.hashSync(password, salt);
+    // Manejar contraseña opcional: permitir vacío o ausente
+    const crypto = require('crypto');
+    let passwordHasheada;
+
+    if (password && password.trim() !== '') {
+      const salt = bcrypt.genSaltSync();
+      passwordHasheada = bcrypt.hashSync(password, salt);
+    } else {
+      // Generar una contraseña temporal aleatoria para cumplir el campo NOT NULL
+      const tempPassword = crypto.randomBytes(16).toString('hex') + 'Aa1!';
+      const salt = bcrypt.genSaltSync();
+      passwordHasheada = bcrypt.hashSync(tempPassword, salt);
+    }
 
     const usuario = await Usuario.create({
       nombre,

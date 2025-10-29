@@ -5,7 +5,7 @@ const swaggerUi = require('swagger-ui-express');
 const swaggerJsdoc = require('swagger-jsdoc');
 const fetch = require('node-fetch');
 const helmet = require('helmet');
-
+const passwordRoutes = require('./routes/passwordRoutes');
 const app = express();
 
 app.use(cors());
@@ -157,6 +157,8 @@ app.use('/api/personas', require('./routes/personas'));
 app.use('/api/parroquias', require('./routes/parroquias'));
 app.use('/api/rolsacramentos', require('./routes/rolsacramentos'));
 app.use('/api/propuestas', require('./routes/propuesta'));
+
+app.use('/api/password', passwordRoutes);
 
 app.get('/api/proxy-pdf', async (req, res) => {
   try {
