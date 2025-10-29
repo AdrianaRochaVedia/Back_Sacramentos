@@ -1,5 +1,5 @@
 const { response } = require('express');
-const Persona = require('../models/TipoSacramento');
+const TipoSacramento = require('../models/TipoSacramento');
 
 // Obtener todos los tipos de sacramento activos
 const getTiposSacramento = async (req, res) => {
@@ -7,14 +7,14 @@ const getTiposSacramento = async (req, res) => {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const offset = (page - 1) * limit;
-        const { count, rows } = await Persona.findAndCountAll({
+        const { count, rows } = await TipoSacramento.findAndCountAll({
             offset,
             limit
         });
 
         res.json({
             ok: true,
-            tipos: rows,
+            tipo_sacramento: rows,
             totalItems: count,
             totalPages: Math.ceil(count / limit),
             currentPage: page
@@ -41,7 +41,7 @@ const getAllTiposSacramento = async (req, res) => {
 
         res.json({
             ok: true,
-            tipos: rows,
+            tipo_sacramento: rows,
             totalItems: count,
             totalPages: Math.ceil(count / limit),
             currentPage: page
@@ -71,7 +71,7 @@ const crearTipoSacramento = async (req, res) => {
     });
     res.status(201).json({
       ok: true,
-      tipo: {
+      tipo_sacramento: {
         id_tipo: tipo.id_tipo,
         nombre: tipo.nombre,
         descripcion: tipo.descripcion
@@ -124,6 +124,10 @@ const actualizarTipoSacramento = async (req, res = response) => {
         if (descripcion !== undefined) updates.descripcion = descripcion;
 
         await tipo.update(updates);
+        return res.json({
+            ok: true,
+            tipo_sacramento: tipo.get({ plain: true })
+        });
 
     } catch (e) {
       console.error('Error al actualizar el tipo de sacramento:', e);
@@ -131,41 +135,11 @@ const actualizarTipoSacramento = async (req, res = response) => {
     }
 };
 
-// Eliminado lógico de un tipo de sacramento
-const eliminarTipoSacramento = async (req, res = response) => {
-    const { id } = req.params;
-
-    try {
-        const tipo = await TipoSacramento.findOne({
-            where: { id_tipo: id, activo: true }
-        });
-
-        if (!tipo) {
-            return res.status(404).json({
-                ok: false,
-                msg: 'Tipo de sacramento no encontrado'
-            });
-        }
-
-        await tipo.update({ activo: false });
-
-        res.json({
-            ok: true,
-            msg: 'Tipo de sacramento eliminado correctamente'
-        });
-    } catch (error) {
-        console.error('Error al eliminar el tipo de sacramento:', error);
-        res.status(500).json({
-            ok: false,
-            msg: 'Error al eliminar el tipo de sacramento'
-        });
-    }
-};
 
   module.exports = {
+    getTiposSacramento,
     getAllTiposSacramento,
     crearTipoSacramento,
     getTipoSacramento,
     actualizarTipoSacramento,
-    eliminarTipoSacramento,
   };

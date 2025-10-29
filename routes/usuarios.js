@@ -14,7 +14,9 @@ router.post(
         check('apellido_paterno', 'El apellido paterno es obligatorio').not().isEmpty(),
         check('apellido_materno', 'El apellido materno es obligatorio').not().isEmpty(),
         check('email', 'El email es obligatorio').isEmail(),
-        check('password').custom(passwordFuerte),
+        check('password')
+          .optional({ nullable: true, checkFalsy: true })
+          .custom(passwordFuerte),
         check('fecha_nacimiento', 'La fecha de nacimiento es obligatoria').isDate(),
         check('rol', 'El rol es obligatorio').not().isEmpty(),
         validarCampos
@@ -26,7 +28,7 @@ router.post(
     '/',
     [
         check('email', 'El email es obligatorio').isEmail(),
-        check('password').custom(passwordFuerte),
+        check('password', 'La contraseña es obligatoria').notEmpty(),
         validarCampos
     ],
     loginUsuario
