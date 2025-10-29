@@ -6,11 +6,21 @@ const swaggerJsdoc = require('swagger-jsdoc');
 const fetch = require('node-fetch');
 const helmet = require('helmet');
 const passwordRoutes = require('./routes/passwordRoutes');
+const audRoutes = require('./routes/auditoriaRoutes');
+const errorHandler = require('./middlewares/error-handler');
 const app = express();
+
 
 app.use(cors());
 app.use(express.static('public'));
 app.use(express.json());
+// ... después de app = express() y middlewares base:
+const correlation = require('./middlewares/correlation');
+const auditar = require('./middlewares/auditar');
+
+app.use(correlation());  // 1) genera/propaga x-correlation-id
+app.use(auditar());      // 2) registra TODAS las rutas
+
 
 // Helmet
 app.use(helmet({
@@ -152,6 +162,10 @@ app.use('/api/documentacion', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
 }));
 
 // Routes
+app.use('/api/auditoria', audRoutes);
+
+// Error handler al final
+
 app.use('/api/usuarios', require('./routes/usuarios'));
 app.use('/api/personas', require('./routes/personas'));
 app.use('/api/parroquias', require('./routes/parroquias'));
@@ -211,5 +225,8 @@ app.get('/api/proxy-pdf', async (req, res) => {
     });
   }
 });
+
+// Error handler al final (después de TODAS las rutas)
+app.use(errorHandler());
 
 module.exports = app;
