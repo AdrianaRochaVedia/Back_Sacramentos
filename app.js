@@ -9,6 +9,7 @@ const passwordRoutes = require('./routes/passwordRoutes');
 const audRoutes = require('./routes/auditoriaRoutes');
 const errorHandler = require('./middlewares/error-handler');
 const app = express();
+const dashboardRoutes = require('./routes/dashboardRoutes');
 
 
 app.use(cors());
@@ -174,6 +175,7 @@ app.use('/api/tiposacramentos', require('./routes/tiposacramentos'));
 app.use('/api/sacramentos', require('./routes/sacramentos'));
 app.use('/api/matrimoniodetalles', require('./routes/matrimoniodetalles'));
 app.use('/api/personasacramentos', require('./routes/personasacramentos'));
+app.use('/api/dashboard', dashboardRoutes);
 
 
 
