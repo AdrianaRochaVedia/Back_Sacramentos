@@ -1,6 +1,7 @@
 const { response } = require('express');
 const Persona = require('../models/Persona');
 const { combinarCondiciones } = require('../middlewares/busqueda');
+const { Op } = require('sequelize');
 
 const getPersonas = async (req, res = response) => {
     try {
@@ -49,7 +50,15 @@ const getPersonas = async (req, res = response) => {
             activo: activo !== undefined ? activo : true 
         };
         
-        const whereConditions = combinarCondiciones(search, camposBusqueda, filtros);
+        let whereConditions = combinarCondiciones(search, camposBusqueda, filtros);
+
+        // Permitir búsqueda parcial y case-insensitive por carnet_identidad si no hay 'search'
+        if (carnet_identidad && !search) {
+            whereConditions = {
+                ...whereConditions,
+                carnet_identidad: { [Op.iLike]: `%${carnet_identidad}%` }
+            };
+        }
 
         const { count, rows } = await Persona.findAndCountAll({
             where: whereConditions,
@@ -214,12 +223,13 @@ const actualizarPersona = async (req, res) => {
     lugar_nacimiento,
     nombre_padre,
     nombre_madre,
-    estado
+    estado,
+    activo
   } = req.body;
 
   try {
     const persona = await Persona.findOne({
-      where: { id_persona: id, activo: true }
+      where: { id_persona: id }
     });
 
     if (!persona) {
@@ -242,6 +252,7 @@ const actualizarPersona = async (req, res) => {
     if (nombre_padre !== undefined) updates.nombre_padre = nombre_padre;
     if (nombre_madre !== undefined) updates.nombre_madre = nombre_madre;
     if (estado !== undefined) updates.estado = estado;
+    if (activo !== undefined) updates.activo = activo;
 
     if (Object.keys(updates).length === 0) {
       return res.status(400).json({ ok:false, msg:'No se enviaron campos a actualizar' });
