@@ -159,6 +159,8 @@ app.use('/api/rolsacramentos', require('./routes/rolsacramentos'));
 app.use('/api/tiposacramentos', require('./routes/tiposacramentos'));
 app.use('/api/sacramentos', require('./routes/sacramentos'));
 app.use('/api/matrimoniodetalles', require('./routes/matrimoniodetalles'));
+app.use('/api/personasacramentos', require('./routes/personasacramentos'));
+
 
 
 app.get('/api/proxy-pdf', async (req, res) => {
