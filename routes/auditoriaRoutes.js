@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const { Op } = require('sequelize');
 const Auditoria = require('../models/Auditoria');
+const { validarJWT } = require('../middlewares/validar-jwt');
 
 const router = Router();
 
@@ -33,7 +34,7 @@ function daysAgo(n) {
  *  has_exception (true/false)
  *  page, limit
  */
-router.get('/', async (req, res) => {
+router.get('/', validarJWT, async (req, res) => {
   try {
     let {
       start_date, end_date,
