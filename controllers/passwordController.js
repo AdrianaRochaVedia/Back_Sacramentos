@@ -10,7 +10,7 @@ const { sendMail } = require('../helpers/mailer');
 const { resetPasswordEmail } = require('../helpers/emailTemplates');
 
 const TOKEN_TTL_MINUTES = 30; // vigencia del token
-const RESET_URL_BASE = process.env.PASSWORD_RESET_URL_BASE || 'http://localhost:5173/reset-password';
+const RESET_URL_BASE = process.env.PASSWORD_RESET_URL_BASE || 'https://tu-frontend.com/reset-password';
 
 // POST /api/password/solicitar   body: { email }
 exports.solicitar = async (req, res) => {
