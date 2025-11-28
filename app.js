@@ -11,7 +11,7 @@ const errorHandler = require('./middlewares/error-handler');
 const app = express();
 const dashboardRoutes = require('./routes/dashboardRoutes');
 
-
+app.set('trust proxy', true);
 app.use(cors());
 app.use(express.static('public'));
 app.use(express.json());
