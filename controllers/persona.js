@@ -52,6 +52,27 @@ const getPersonas = async (req, res = response) => {
         
         let whereConditions = combinarCondiciones(search, camposBusqueda, filtros);
 
+        //para error de fecha de nacimiento, al buscar como texto
+        // 🔥 Quitar condiciones inválidas generadas sobre el campo DATE
+        if (search && whereConditions[Op.or]) {
+            whereConditions[Op.or] = whereConditions[Op.or].filter(cond => {
+                // convertir condición a texto para inspección
+                const serialized = JSON.stringify(cond).toLowerCase();
+                
+                // eliminar la condición INVALIDA: fecha_nacimiento ILIKE ...
+                return !serialized.includes('"fecha_nacimiento"') || !serialized.includes('ilike');
+            });
+
+            // 🔥 Añadir la condición correcta usando CAST
+            const { where, cast, col } = require('sequelize');
+
+            whereConditions[Op.or].push(
+                where(cast(col("fecha_nacimiento"), "text"), {
+                    [Op.iLike]: `%${search}%`
+                })
+            );
+        }
+
         // Permitir búsqueda parcial y case-insensitive por carnet_identidad si no hay 'search'
         if (carnet_identidad && !search) {
             whereConditions = {

@@ -6,7 +6,8 @@ const {
     getPersonaSacramentos,
     crearPersonaSacramento,
     getPersonasPorSacramento,
-    getSacramentosPorPersona
+    getSacramentosPorPersona,
+    validarBautizoPersona
 } = require('../controllers/personasacramento');
 const { validarJWT } = require('../middlewares/validar-jwt');
 
@@ -30,5 +31,8 @@ router.post('/new', [
     check('sacramento_id_sacramento', 'El ID de sacramento debe ser un número').isNumeric(),
     validarCampos
 ], crearPersonaSacramento);
+
+//ruta para validar bautizo
+router.get('/validar-bautizo/:personaId', validarBautizoPersona);
 
 module.exports = router;             
