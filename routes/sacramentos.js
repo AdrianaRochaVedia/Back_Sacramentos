@@ -22,6 +22,24 @@ router.get('/', validarJWT,getSacramentos);
 
 router.get('/all', validarJWT, getAllSacramentos);
 
+router.get('/buscar-persona', 
+    validarJWT,
+    buscarSacramentosPorPersona);
+router.get('/completo/:id',
+     validarJWT, 
+     getSacramentoCompleto);
+router.put(
+  '/completo/:id',
+  validarJWT,
+  [
+    check('fecha_sacramento', 'La fecha es obligatoria').isDate(),
+    check('foja', 'La foja es obligatoria').not().isEmpty(),
+    check('numero', 'El número es obligatorio').not().isEmpty(),
+    validarCampos
+  ],
+  actualizarSacramentoCompleto
+);
+
 router.get('/:id', validarJWT, getSacramento);
 
 router.put('/:id', validarJWT, [
@@ -41,24 +59,6 @@ router.post(
     '/new-completo',
     validarJWT,
     crearSacramentoCompleto
-);
-//nuevas rutas para buscar y editar sacramentos completos
-router.get('/buscar-persona', 
-    validarJWT,
-    buscarSacramentosPorPersona);
-router.get('/completo/:id',
-     validarJWT, 
-     getSacramentoCompleto);
-router.put(
-  '/completo/:id',
-  validarJWT,
-  [
-    check('fecha_sacramento', 'La fecha es obligatoria').isDate(),
-    check('foja', 'La foja es obligatoria').not().isEmpty(),
-    check('numero', 'El número es obligatorio').not().isEmpty(),
-    validarCampos
-  ],
-  actualizarSacramentoCompleto
 );
 
 

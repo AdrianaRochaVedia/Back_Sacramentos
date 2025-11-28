@@ -4,6 +4,9 @@ const TipoSacramento = require('../models/TipoSacramento');
 const Parroquia = require('../models/Parroquia');           
 const Usuario = require('../models/Usuario');
 const PersonaSacramento = require('../models/PersonaSacramento');
+const Persona = require('../models/Persona');
+const RolSacramento = require('../models/RolSacramento');
+const { Op } = require('sequelize');
 const { combinarCondiciones } = require('../middlewares/busqueda');
 
 
@@ -316,16 +319,24 @@ const crearSacramentoCompleto = async (req, res) => {
 // para buscar sacramento por la persona que lo recibió
 // Buscar sacramentos por datos de la persona + tipo sacramento + rol principal
 const buscarSacramentosPorPersona = async (req, res) => {
+  // Roles permitidos para mostrar sacramentos donde la persona participó
+  const ROLES_VISIBLES = [
+    1, 4, 10, 21,    // roles principales (bautizado, confirmado, principal)
+    2, 3, 11, 12, 15, 16, // matrimonio (esposo/esposa/novio/novia)
+    5, 6,            // padrinos
+    8, 9, 14, 17     // ministros / sacerdotes / celebrantes
+  ];
   try {
     const {
       nombre,
       apellido_paterno,
       apellido_materno,
       ci,
+      carnet_identidad,
       fecha_nacimiento,
       lugar_nacimiento,
       tipo_sacramento_id_tipo,
-      rol_principal,
+      //rol_principal, // No se requiere para la nueva lógica
       page = 1,
       limit = 10
     } = req.query;
@@ -335,17 +346,14 @@ const buscarSacramentosPorPersona = async (req, res) => {
       return res.status(400).json({ ok: false, msg: "Debe enviar tipo_sacramento_id_tipo" });
     }
 
-    if (!rol_principal) {
-      return res.status(400).json({ ok: false, msg: "Debe enviar rol_principal" });
-    }
-
     // Construcción dinámica de filtros de persona
     const filtrosPersona = {};
 
     if (nombre) filtrosPersona.nombre = { [Op.like]: `%${nombre}%` };
     if (apellido_paterno) filtrosPersona.apellido_paterno = { [Op.like]: `%${apellido_paterno}%` };
     if (apellido_materno) filtrosPersona.apellido_materno = { [Op.like]: `%${apellido_materno}%` };
-    if (ci) filtrosPersona.ci = { [Op.like]: `%${ci}%` };
+    if (ci) filtrosPersona.carnet_identidad = { [Op.like]: `%${ci}%` };
+    if (carnet_identidad) filtrosPersona.carnet_identidad = { [Op.like]: `%${carnet_identidad}%` };
     if (fecha_nacimiento) filtrosPersona.fecha_nacimiento = fecha_nacimiento;
     if (lugar_nacimiento) filtrosPersona.lugar_nacimiento = { [Op.like]: `%${lugar_nacimiento}%` };
 
@@ -357,14 +365,17 @@ const buscarSacramentosPorPersona = async (req, res) => {
         activo: true,
         tipo_sacramento_id_tipo
       },
+      subQuery: false,
       include: [
-        // 🔵 Relación principal (persona principal)
+        // 🔵 Relación principal (persona principal, padrinos, ministros)
         {
           model: PersonaSacramento,
           as: "personaSacramentos",
           required: true,
           where: {
-            rol_sacramento_id_rol_sacra: rol_principal   // <-- DINÁMICO
+            rol_sacramento_id_rol_sacra: {
+              [Op.in]: ROLES_VISIBLES
+            }
           },
           include: [
             {
@@ -386,12 +397,6 @@ const buscarSacramentosPorPersona = async (req, res) => {
           model: Parroquia,
           as: "parroquia"
         },
-
-        // Usuario que registró
-        {
-          model: Usuario,
-          as: "usuario"
-        }
       ],
       limit,
       offset,
@@ -401,11 +406,26 @@ const buscarSacramentosPorPersona = async (req, res) => {
       ]
     });
 
+    // 🔴 EXCLUSIÓN OBLIGATORIA:
+    // No mostrar sacramentos donde UNA DE LAS PERSONAS encontradas es también el usuario que registró el sacramento.
+    const filtrados = rows.filter(s => {
+      const personasRelacionadas = s.personaSacramentos.map(p => p.persona);
+
+      if (!personasRelacionadas.length) return false;
+
+      // Excluir sacramentos donde UNA DE LAS PERSONAS buscadas sea el mismo usuario que registró
+      const coincideConUsuario = personasRelacionadas.some(
+        p => p.id_persona === s.usuario_id_usuario
+      );
+
+      return !coincideConUsuario;
+    });
+
     return res.json({
       ok: true,
-      resultados: rows,
-      total: count,
-      totalPages: Math.ceil(count / limit),
+      resultados: filtrados,
+      total: filtrados.length,
+      totalPages: Math.ceil(filtrados.length / limit),
       currentPage: page
     });
 
@@ -475,7 +495,7 @@ const getSacramentoCompleto = async (req, res) => {
       id_relacion: r.id_persona_sacramento,
       persona_id: r.persona.id_persona,
       nombre_completo: `${r.persona.nombre} ${r.persona.apellido_paterno} ${r.persona.apellido_materno}`,
-      ci: r.persona.ci,
+      carnet_identidad: r.carnet_identidad,
       rol_id: r.rol.id_rol_sacra,
       rol_nombre: r.rol.nombre
     }));
