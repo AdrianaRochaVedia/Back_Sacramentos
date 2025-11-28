@@ -1,5 +1,8 @@
 const { response } = require('express');
 const Persona = require('../models/Persona');
+const PersonaSacramento = require('../models/PersonaSacramento');
+const RolSacramento = require('../models/RolSacramento');
+const requisitos = require('./utils/sacramentos');
 const { combinarCondiciones } = require('../middlewares/busqueda');
 const { Op } = require('sequelize');
 
@@ -51,27 +54,6 @@ const getPersonas = async (req, res = response) => {
         };
         
         let whereConditions = combinarCondiciones(search, camposBusqueda, filtros);
-
-        //para error de fecha de nacimiento, al buscar como texto
-        // 🔥 Quitar condiciones inválidas generadas sobre el campo DATE
-        if (search && whereConditions[Op.or]) {
-            whereConditions[Op.or] = whereConditions[Op.or].filter(cond => {
-                // convertir condición a texto para inspección
-                const serialized = JSON.stringify(cond).toLowerCase();
-                
-                // eliminar la condición INVALIDA: fecha_nacimiento ILIKE ...
-                return !serialized.includes('"fecha_nacimiento"') || !serialized.includes('ilike');
-            });
-
-            // 🔥 Añadir la condición correcta usando CAST
-            const { where, cast, col } = require('sequelize');
-
-            whereConditions[Op.or].push(
-                where(cast(col("fecha_nacimiento"), "text"), {
-                    [Op.iLike]: `%${search}%`
-                })
-            );
-        }
 
         // Permitir búsqueda parcial y case-insensitive por carnet_identidad si no hay 'search'
         if (carnet_identidad && !search) {
@@ -324,11 +306,87 @@ const eliminarPersona = async (req, res = response) => {
     }
 };
 
+//intento endpoint para todos los sacramentos 
+
+const buscarPersonasParaSacramento = async (req, res) => {
+  try {
+    let { search, rol: sacramento } = req.query;
+
+    if (!search || !sacramento)
+      return res.status(400).json({ ok: false, msg: "Faltan parámetros" });
+
+    // Normalizar a minúsculas
+    sacramento = sacramento.toLowerCase();
+
+    // Buscar clave real del archivo requisitos (insensible a mayúsculas)
+    const clave = Object.keys(requisitos).find(
+      (key) => key.toLowerCase() === sacramento
+    );
+
+    if (!clave)
+      return res.status(400).json({ ok: false, msg: "Sacramento inválido" });
+
+    const regla = requisitos[clave];
+
+    // 1. Buscar personas por nombre/CI
+    const personas = await Persona.findAll({
+      where: {
+        activo: true,
+        [Op.or]: [
+          { nombre: { [Op.iLike]: `%${search}%` } },
+          { apellido_paterno: { [Op.iLike]: `%${search}%` } },
+          { apellido_materno: { [Op.iLike]: `%${search}%` } },
+          { carnet_identidad: { [Op.iLike]: `%${search}%` } }
+        ]
+      },
+      include: [
+        {
+          model: PersonaSacramento,
+          as: "personaSacramentos",
+          include: [
+            {
+              model: RolSacramento,
+              as: "rolSacramento",
+              attributes: ["nombre"]
+            }
+          ],
+          required: false
+        }
+      ]
+    });
+
+    // 2. Filtrar por reglas del sacramento
+    const resultado = personas.filter((p) => {
+        const roles = p.personaSacramentos.map(r => r.rolSacramento.nombre);
+      
+
+        console.log("----");
+        console.log("Persona:", p.nombre, p.apellido_paterno);
+        console.log("Roles:", roles);
+        console.log("Regla requerida:", regla.requeridos);
+        console.log("Regla excluir:", regla.excluir);
+
+        const cumpleRequeridos = regla.requeridos.every(req => roles.includes(req));
+        const noTieneExcluidos = !regla.excluir.some(ex => roles.includes(ex));
+      
+
+      return cumpleRequeridos && noTieneExcluidos;
+    });
+
+    res.json({ ok: true, personas: resultado });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ ok: false, msg: "Error en búsqueda" });
+  }
+};
+
   module.exports = {
     getPersonas,
     crearPersona,
     getPersona,
     actualizarPersona,
     eliminarPersona,
-    getAllPersonas
+    getAllPersonas,
+    buscarPersonasParaSacramento
   };
