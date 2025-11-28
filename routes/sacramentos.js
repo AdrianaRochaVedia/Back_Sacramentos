@@ -31,22 +31,13 @@ router.get('/completo/:id',
 router.put(
   '/completo/:id',
   validarJWT,
-  [
-    check('fecha_sacramento', 'La fecha es obligatoria').isDate(),
-    check('foja', 'La foja es obligatoria').not().isEmpty(),
-    check('numero', 'El número es obligatorio').not().isEmpty(),
-    validarCampos
-  ],
+    validarCampos,
   actualizarSacramentoCompleto
 );
 
 router.get('/:id', validarJWT, getSacramento);
 
 router.put('/:id', validarJWT, [
-    check('id', 'El ID debe ser un número válido').isInt(),
-    check('fecha_sacramento', 'La fecha del sacramento es obligatoria').isDate(),
-    check('foja', 'La foja es obligatoria').not().isEmpty(),
-    check('numero', 'El número es obligatorio').not().isEmpty(),
     validarCampos
 ], actualizarSacramento);
 
