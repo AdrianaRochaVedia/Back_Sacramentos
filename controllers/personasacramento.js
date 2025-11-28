@@ -152,10 +152,55 @@ const getSacramentosPorPersona = async (req, res) => {
     }
 };
 
+//primer intento de filtro para bautizo
+const validarBautizoPersona = async (req, res) => {
+    const { personaId } = req.params;
+
+    try {
+        const existe = await PersonaSacramento.findOne({
+            where: {
+                persona_id_persona: personaId
+            },
+            include: [
+                {
+                    model: Sacramento,
+                    as: 'sacramento',
+                    where: { tipo_sacramento_id_tipo: 1, activo: true }  // 1 = BAUTIZO
+                },
+                {
+                    model: RolSacramento,
+                    as: 'rolSacramento',
+                    where: { nombre: 'BAUTIZADO' }
+                }
+            ]
+        });
+
+        if (existe) {
+            return res.status(400).json({
+                ok: false,
+                msg: 'La persona YA está bautizada.'
+            });
+        }
+
+        return res.json({
+            ok: true,
+            msg: 'La persona puede recibir bautizo.'
+        });
+
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({
+            ok: false,
+            msg: 'Error validando bautizo.'
+        });
+    }
+};
+
 
 module.exports = {
     getPersonaSacramentos,
     crearPersonaSacramento,
     getPersonasPorSacramento,
     getSacramentosPorPersona,
+    validarBautizoPersona
 };

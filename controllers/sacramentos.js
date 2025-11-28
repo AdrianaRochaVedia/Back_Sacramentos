@@ -3,6 +3,7 @@ const Sacramento = require('../models/Sacramento');
 const TipoSacramento = require('../models/TipoSacramento');  
 const Parroquia = require('../models/Parroquia');           
 const Usuario = require('../models/Usuario');
+const PersonaSacramento = require('../models/PersonaSacramento');
 const { combinarCondiciones } = require('../middlewares/busqueda');
 
 
@@ -250,11 +251,77 @@ const eliminarSacramento = async (req, res = response) => {
     }
 };
 
+// endpoint para crear sacramento y todas sus relaciones
+const crearSacramentoCompleto = async (req, res) => {
+  const t = await Sacramento.sequelize.transaction();
+  try {
+    const {
+      fecha_sacramento,
+      foja,
+      numero,
+      tipo_sacramento_id_tipo,
+      parroquiaId,
+      relaciones
+    } = req.body;
+
+    // usuario autenticado
+    const usuario_id_usuario = req.uid; // VIENE DEL JWT
+
+    if (!req.uid) {
+      return res.status(400).json({ ok: false, msg: "Usuario no autenticado" });
+    }
+
+    if (!relaciones || !Array.isArray(relaciones)) {
+      return res.status(400).json({ ok: false, msg: "Formato inválido en relaciones" });
+    }
+
+    // 1️⃣ Crear sacramento
+    const nuevo = await Sacramento.create({
+      fecha_sacramento,
+      foja,
+      numero,
+      tipo_sacramento_id_tipo,
+      institucion_parroquia_id_parroquia: parroquiaId,
+      usuario_id_usuario,               // 👈 ahora viene del JWT
+      activo: true,
+      fecha_registro: new Date(),       // opcional, igual se llena solo
+      fecha_actualizacion: new Date()   // 👈 importante
+    }, { transaction: t });
+
+    const id_sacramento = nuevo.id_sacramento;
+
+    // 2️⃣ Registrar TODAS las relaciones dinámicas
+    // Crear relaciones en persona_sacramento
+    for (const rel of relaciones) {
+      await PersonaSacramento.create({
+        persona_id_persona: rel.persona_id,
+        rol_sacramento_id_rol_sacra: rel.rol_sacramento_id,
+        sacramento_id_sacramento: id_sacramento
+      }, { transaction: t });
+    }
+
+    // 3️⃣ Confirmar transacción
+    await t.commit();
+
+    return res.status(201).json({
+      ok: true,
+      msg: "Sacramento creado correctamente",
+      sacramento: nuevo
+    });
+
+  } catch (error) {
+    await t.rollback();
+    console.error("Error al crear sacramento completo:", error);
+    return res.status(500).json({ ok: false, msg: "Error al crear sacramento" });
+  }
+};
+
   module.exports = {
     getSacramentos,
     crearSacramento,
     getSacramento,
     actualizarSacramento,
     eliminarSacramento,
-    getAllSacramentos
+    getAllSacramentos,
+    crearSacramentoCompleto
   };

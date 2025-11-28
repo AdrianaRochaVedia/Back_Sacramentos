@@ -6,24 +6,53 @@ const generarCondicionesBusqueda = (searchTerm, camposBusqueda) => {
     return {};
   }
 
-  const terminoNormalizado = searchTerm.trim().toLowerCase();
+  const termino = searchTerm.trim().toLowerCase();
 
-  const condicionesBasicas = camposBusqueda.map(campo => ({
-    [campo]: {
-      [Op.iLike]: `%${terminoNormalizado}%`
+  const esNumero = /^\d+$/.test(termino); // solo dígitos
+  const esFecha = /^\d{4}(-\d{1,2}){0,2}$/.test(termino); // YYYY / YYYY-MM / YYYY-MM-DD
+
+  const condiciones = [];
+
+  camposBusqueda.forEach(campo => {
+    const esFechaCampo = campo.includes("fecha");
+    const esNumericoCampo = campo.includes("numero") || campo.startsWith("id_");
+    const esCICampo = campo.includes("ci") || campo.includes("carnet");
+
+    //  BUSQUEDA NUMÉRICA
+    if (esNumero) {
+      if (esCICampo || esNumericoCampo) {
+        condiciones.push(
+          literal(`unaccent(LOWER(CAST(${campo} AS TEXT))) LIKE unaccent(LOWER('%${termino}%'))`)
+        );
+      }
+      return;
     }
-  }));
 
-  const condicionesUnaccent = camposBusqueda.map(campo => 
-    literal(`unaccent(LOWER(CAST(${campo} AS TEXT))) LIKE unaccent(LOWER('%${terminoNormalizado}%'))`)
-  );
+    //  BUSQUEDA DE FECHA
+    if (esFecha) {
+      if (esFechaCampo) {
+        condiciones.push(
+          literal(`CAST(${campo} AS TEXT) ILIKE '%${termino}%'`)
+        );
+      }
+      return;
+    }
 
-  return {
-    [Op.or]: [
-      ...condicionesBasicas,
-      ...condicionesUnaccent
-    ]
-  };
+    //  BUSQUEDA TEXTO (general)
+    // Aquí incluimos CI porque es VARCHAR
+    if (!esFechaCampo) {
+      condiciones.push(
+        literal(`unaccent(LOWER(CAST(${campo} AS TEXT))) LIKE unaccent(LOWER('%${termino}%'))`)
+      );
+    }
+  });
+
+  // fallback seguro
+  if (condiciones.length === 0) {
+    condiciones.push(literal("false"));
+  }
+
+  return { [Op.or]: condiciones };
 };
 
 
