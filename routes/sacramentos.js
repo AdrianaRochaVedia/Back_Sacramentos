@@ -1,7 +1,7 @@
 const { Router } = require('express');
 const { check } = require('express-validator');
 const { validarCampos } = require('../middlewares/validar-campos');
-const { getAllSacramentos, crearSacramento, getSacramento, getSacramentos, actualizarSacramento, eliminarSacramento } = require('../controllers/sacramentos');
+const { getAllSacramentos, crearSacramento, getSacramento, getSacramentos, actualizarSacramento, eliminarSacramento, crearSacramentoCompleto } = require('../controllers/sacramentos');
 const { validarJWT } = require('../middlewares/validar-jwt');
 
 const router = Router();
@@ -36,5 +36,11 @@ router.patch('/:id', validarJWT, [
     check('id', 'El ID debe ser un número válido').isInt(),
     validarCampos
 ], eliminarSacramento);
+
+router.post(
+    '/new-completo',
+    validarJWT,
+    crearSacramentoCompleto
+);
 
 module.exports = router;

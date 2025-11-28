@@ -1,7 +1,7 @@
 const requisitosRoles = {
   padrino: {
     requeridos: ["BAUTIZADO"],
-    excluir: []   // nada que lo bloquee
+    excluir: []
   },
   ministro: {
     requeridos: ["BAUTIZADO", "CONFIRMADO"],

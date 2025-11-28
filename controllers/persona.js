@@ -378,10 +378,9 @@ const buscarPersonasParaSacramento = async (req, res) => {
         console.log("Persona:", p.id_persona, p.nombre, p.apellido_paterno);
         console.log("Roles:", roles);
         console.log("Regla requerida:", regla.requeridos);
-        console.log("Regla excluir:", regla.excluir);
-
-
-    
+        console.log("Cumple requeridos:", regla.requeridos.every(req => roles.includes(req)));
+        console.log("Regla requerida:", regla.requeridos);
+        console.log("Cumple:", regla.requeridos.every(req => roles.includes(req)));
 
       const cumpleRequeridos = regla.requeridos.every(req => roles.includes(req));
       const noTieneExcluidos = !regla.excluir.some(ex => roles.includes(ex));
