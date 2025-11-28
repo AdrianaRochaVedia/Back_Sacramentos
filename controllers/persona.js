@@ -3,6 +3,7 @@ const Persona = require('../models/Persona');
 const PersonaSacramento = require('../models/PersonaSacramento');
 const RolSacramento = require('../models/RolSacramento');
 const requisitos = require('./utils/sacramentos');
+const rolesReq = require('./utils/rolesSacramentos');
 const { combinarCondiciones } = require('../middlewares/busqueda');
 const { Op } = require('sequelize');
 
@@ -307,29 +308,43 @@ const eliminarPersona = async (req, res = response) => {
 };
 
 //intento endpoint para todos los sacramentos 
-
 const buscarPersonasParaSacramento = async (req, res) => {
   try {
-    let { search, rol: sacramento } = req.query;
+    let { search, rol: claveRol, tipo } = req.query;
 
-    if (!search || !sacramento)
+    if (!search || !claveRol)
       return res.status(400).json({ ok: false, msg: "Faltan parámetros" });
 
-    // Normalizar a minúsculas
-    sacramento = sacramento.toLowerCase();
+    // Normalizar
+    claveRol = claveRol.toLowerCase();
+    tipo = tipo?.toLowerCase() || "sacramento"; // por defecto sacramento
 
-    // Buscar clave real del archivo requisitos (insensible a mayúsculas)
-    const clave = Object.keys(requisitos).find(
-      (key) => key.toLowerCase() === sacramento
+    // Seleccionar la tabla correcta de requisitos
+    let reglasBase;
+    if (tipo === "sacramento") reglasBase = requisitos;
+    else if (tipo === "rol") reglasBase = rolesReq;
+    else
+      return res.status(400).json({ ok: false, msg: "Tipo inválido (sacramento | rol)" });
+
+    // Buscar clave real dentro de reglasBase sin importar mayúsculas
+    const clave = Object.keys(reglasBase).find(
+      (key) => key.toLowerCase() === claveRol
     );
 
     if (!clave)
-      return res.status(400).json({ ok: false, msg: "Sacramento inválido" });
+      return res.status(400).json({ ok: false, msg: "Rol o sacramento inválido" });
 
-    const regla = requisitos[clave];
+    const regla = reglasBase[clave];
 
-    // 1. Buscar personas por nombre/CI
+    // 1. Buscar personas por coincidencia de nombre o CI
     const personas = await Persona.findAll({
+      attributes: [
+        "id_persona",
+        "nombre",
+        "apellido_paterno",
+        "apellido_materno",
+        "carnet_identidad",
+      ],
       where: {
         activo: true,
         [Op.or]: [
@@ -355,29 +370,30 @@ const buscarPersonasParaSacramento = async (req, res) => {
       ]
     });
 
-    // 2. Filtrar por reglas del sacramento
+    // 2. Filtrar según las reglas
     const resultado = personas.filter((p) => {
-        const roles = p.personaSacramentos.map(r => r.rolSacramento.nombre);
-      
+      const roles = p.personaSacramentos.map(r => r.rolSacramento.nombre.toUpperCase());
 
-        console.log("----");
-        console.log("Persona:", p.nombre, p.apellido_paterno);
+       console.log("----");
+        console.log("Persona:", p.id_persona, p.nombre, p.apellido_paterno);
         console.log("Roles:", roles);
         console.log("Regla requerida:", regla.requeridos);
         console.log("Regla excluir:", regla.excluir);
 
-        const cumpleRequeridos = regla.requeridos.every(req => roles.includes(req));
-        const noTieneExcluidos = !regla.excluir.some(ex => roles.includes(ex));
-      
+
+    
+
+      const cumpleRequeridos = regla.requeridos.every(req => roles.includes(req));
+      const noTieneExcluidos = !regla.excluir.some(ex => roles.includes(ex));
 
       return cumpleRequeridos && noTieneExcluidos;
     });
 
-    res.json({ ok: true, personas: resultado });
+    return res.json({ ok: true, personas: resultado });
 
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ ok: false, msg: "Error en búsqueda" });
+    console.error("Error en buscarPersonasParaSacramento:", error);
+    return res.status(500).json({ ok: false, msg: "Error en búsqueda" });
   }
 };
 
