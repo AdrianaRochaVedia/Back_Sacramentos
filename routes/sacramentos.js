@@ -1,7 +1,7 @@
 const { Router } = require('express');
 const { check } = require('express-validator');
 const { validarCampos } = require('../middlewares/validar-campos');
-const { getAllSacramentos, crearSacramento, getSacramento, getSacramentos, actualizarSacramento, eliminarSacramento, crearSacramentoCompleto } = require('../controllers/sacramentos');
+const { getAllSacramentos, crearSacramento, getSacramento, getSacramentos, actualizarSacramento, eliminarSacramento, crearSacramentoCompleto, buscarSacramentosPorPersona, getSacramentoCompleto, actualizarSacramentoCompleto } = require('../controllers/sacramentos');
 const { validarJWT } = require('../middlewares/validar-jwt');
 
 const router = Router();
@@ -42,5 +42,25 @@ router.post(
     validarJWT,
     crearSacramentoCompleto
 );
+//nuevas rutas para buscar y editar sacramentos completos
+router.get('/buscar-persona', 
+    validarJWT,
+    buscarSacramentosPorPersona);
+router.get('/completo/:id',
+     validarJWT, 
+     getSacramentoCompleto);
+router.put(
+  '/completo/:id',
+  validarJWT,
+  [
+    check('fecha_sacramento', 'La fecha es obligatoria').isDate(),
+    check('foja', 'La foja es obligatoria').not().isEmpty(),
+    check('numero', 'El número es obligatorio').not().isEmpty(),
+    validarCampos
+  ],
+  actualizarSacramentoCompleto
+);
+
+
 
 module.exports = router;

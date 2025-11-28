@@ -275,22 +275,21 @@ const crearSacramentoCompleto = async (req, res) => {
       return res.status(400).json({ ok: false, msg: "Formato inválido en relaciones" });
     }
 
-    // 1️⃣ Crear sacramento
+    //  Crear sacramento
     const nuevo = await Sacramento.create({
       fecha_sacramento,
       foja,
       numero,
       tipo_sacramento_id_tipo,
       institucion_parroquia_id_parroquia: parroquiaId,
-      usuario_id_usuario,               // 👈 ahora viene del JWT
+      usuario_id_usuario,               // del jwt
       activo: true,
       fecha_registro: new Date(),       // opcional, igual se llena solo
-      fecha_actualizacion: new Date()   // 👈 importante
+      fecha_actualizacion: new Date()   //
     }, { transaction: t });
 
     const id_sacramento = nuevo.id_sacramento;
 
-    // 2️⃣ Registrar TODAS las relaciones dinámicas
     // Crear relaciones en persona_sacramento
     for (const rel of relaciones) {
       await PersonaSacramento.create({
@@ -300,7 +299,6 @@ const crearSacramentoCompleto = async (req, res) => {
       }, { transaction: t });
     }
 
-    // 3️⃣ Confirmar transacción
     await t.commit();
 
     return res.status(201).json({
@@ -315,6 +313,296 @@ const crearSacramentoCompleto = async (req, res) => {
     return res.status(500).json({ ok: false, msg: "Error al crear sacramento" });
   }
 };
+// para buscar sacramento por la persona que lo recibió
+// Buscar sacramentos por datos de la persona + tipo sacramento + rol principal
+const buscarSacramentosPorPersona = async (req, res) => {
+  try {
+    const {
+      nombre,
+      apellido_paterno,
+      apellido_materno,
+      ci,
+      fecha_nacimiento,
+      lugar_nacimiento,
+      tipo_sacramento_id_tipo,
+      rol_principal,
+      page = 1,
+      limit = 10
+    } = req.query;
+
+    // Validaciones necesarias
+    if (!tipo_sacramento_id_tipo) {
+      return res.status(400).json({ ok: false, msg: "Debe enviar tipo_sacramento_id_tipo" });
+    }
+
+    if (!rol_principal) {
+      return res.status(400).json({ ok: false, msg: "Debe enviar rol_principal" });
+    }
+
+    // Construcción dinámica de filtros de persona
+    const filtrosPersona = {};
+
+    if (nombre) filtrosPersona.nombre = { [Op.like]: `%${nombre}%` };
+    if (apellido_paterno) filtrosPersona.apellido_paterno = { [Op.like]: `%${apellido_paterno}%` };
+    if (apellido_materno) filtrosPersona.apellido_materno = { [Op.like]: `%${apellido_materno}%` };
+    if (ci) filtrosPersona.ci = { [Op.like]: `%${ci}%` };
+    if (fecha_nacimiento) filtrosPersona.fecha_nacimiento = fecha_nacimiento;
+    if (lugar_nacimiento) filtrosPersona.lugar_nacimiento = { [Op.like]: `%${lugar_nacimiento}%` };
+
+    const offset = (page - 1) * limit;
+
+    // 🟦 QUERY PRINCIPAL
+    const { count, rows } = await Sacramento.findAndCountAll({
+      where: {
+        activo: true,
+        tipo_sacramento_id_tipo
+      },
+      include: [
+        // 🔵 Relación principal (persona principal)
+        {
+          model: PersonaSacramento,
+          as: "personaSacramentos",
+          required: true,
+          where: {
+            rol_sacramento_id_rol_sacra: rol_principal   // <-- DINÁMICO
+          },
+          include: [
+            {
+              model: Persona,
+              as: "persona",
+              where: filtrosPersona
+            }
+          ]
+        },
+
+        // Info del tipo de sacramento
+        {
+          model: TipoSacramento,
+          as: "tipoSacramento"
+        },
+
+        // Info parroquia
+        {
+          model: Parroquia,
+          as: "parroquia"
+        },
+
+        // Usuario que registró
+        {
+          model: Usuario,
+          as: "usuario"
+        }
+      ],
+      limit,
+      offset,
+      order: [
+        ['fecha_sacramento', 'DESC'],
+        ['numero', 'DESC']
+      ]
+    });
+
+    return res.json({
+      ok: true,
+      resultados: rows,
+      total: count,
+      totalPages: Math.ceil(count / limit),
+      currentPage: page
+    });
+
+  } catch (error) {
+    console.error("Error en buscarSacramentosPorPersona:", error);
+    res.status(500).json({
+      ok: false,
+      msg: "Error al realizar la búsqueda",
+      error: error.message
+    });
+  }
+};
+//para obtener los datos del sacramento y las personas relacionadas
+// Obtener un sacramento con TODAS sus relaciones para editar
+const getSacramentoCompleto = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const sacramento = await Sacramento.findOne({
+      where: { id_sacramento: id, activo: true },
+      include: [
+        // Roles y personas
+        {
+          model: PersonaSacramento,
+          as: "personaSacramentos",
+          include: [
+            {
+              model: Persona,
+              as: "persona"
+            },
+            {
+              model: RolSacramento,
+              as: "rol"
+            }
+          ]
+        },
+
+        // Tipo de sacramento
+        {
+          model: TipoSacramento,
+          as: "tipoSacramento"
+        },
+
+        // Parroquia
+        {
+          model: Parroquia,
+          as: "parroquia"
+        },
+
+        // Usuario
+        {
+          model: Usuario,
+          as: "usuario"
+        }
+      ]
+    });
+
+    if (!sacramento) {
+      return res.status(404).json({
+        ok: false,
+        msg: "Sacramento no encontrado"
+      });
+    }
+
+    // 🔵 Restructuración para FRONTEND ( EXACTO COMO PARA EDITAR )
+    const relaciones = sacramento.personaSacramentos.map(r => ({
+      id_relacion: r.id_persona_sacramento,
+      persona_id: r.persona.id_persona,
+      nombre_completo: `${r.persona.nombre} ${r.persona.apellido_paterno} ${r.persona.apellido_materno}`,
+      ci: r.persona.ci,
+      rol_id: r.rol.id_rol_sacra,
+      rol_nombre: r.rol.nombre
+    }));
+
+    res.json({
+      ok: true,
+      sacramento: {
+        id_sacramento: sacramento.id_sacramento,
+        fecha_sacramento: sacramento.fecha_sacramento,
+        foja: sacramento.foja,
+        numero: sacramento.numero,
+        parroquia: {
+          id: sacramento.parroquia.id_parroquia,
+          nombre: sacramento.parroquia.nombre
+        },
+        tipo_sacramento: {
+          id: sacramento.tipoSacramento.id_tipo,
+          nombre: sacramento.tipoSacramento.nombre
+        },
+        usuario_registro: {
+          id: sacramento.usuario.id_usuario,
+          nombre: sacramento.usuario.nombre
+        },
+        relaciones
+      }
+    });
+
+  } catch (error) {
+    console.error("Error en getSacramentoCompleto:", error);
+    res.status(500).json({
+      ok: false,
+      msg: "Error al obtener sacramento completo"
+    });
+  }
+};
+// para editar sacramento y sus relaciones
+// PUT - actualizar sacramento completo (datos + relaciones)
+const actualizarSacramentoCompleto = async (req, res) => {
+  const t = await Sacramento.sequelize.transaction();
+
+  try {
+    const id_sacramento = req.params.id;
+
+    const {
+      fecha_sacramento,
+      foja,
+      numero,
+      tipo_sacramento_id_tipo,
+      parroquiaId,
+      relaciones
+    } = req.body;
+
+    const usuario_id_usuario = req.uid; // del JWT
+
+    if (!usuario_id_usuario) {
+      return res.status(400).json({ ok: false, msg: "Usuario no autenticado" });
+    }
+
+    if (!relaciones || !Array.isArray(relaciones)) {
+      return res.status(400).json({ ok: false, msg: "Formato inválido en relaciones" });
+    }
+
+    // 1️⃣ Verificar si el sacramento existe
+    const sacramento = await Sacramento.findOne({
+      where: { id_sacramento, activo: true }
+    });
+
+    if (!sacramento) {
+      return res
+        .status(404)
+        .json({ ok: false, msg: "Sacramento no encontrado" });
+    }
+
+    // 2️⃣ Actualizar datos principales del sacramento
+    await Sacramento.update(
+      {
+        fecha_sacramento,
+        foja,
+        numero,
+        tipo_sacramento_id_tipo,
+        institucion_parroquia_id_parroquia: parroquiaId,
+        usuario_id_usuario,
+        fecha_actualizacion: new Date()
+      },
+      { where: { id_sacramento }, transaction: t }
+    );
+
+    // 3️⃣ Eliminar relaciones antiguas
+    await PersonaSacramento.destroy(
+      {
+        where: { sacramento_id_sacramento: id_sacramento }
+      },
+      { transaction: t }
+    );
+
+    // 4️⃣ Crear nuevas relaciones
+    for (const rel of relaciones) {
+      await PersonaSacramento.create(
+        {
+          persona_id_persona: rel.persona_id,
+          rol_sacramento_id_rol_sacra: rel.rol_sacramento_id,
+          sacramento_id_sacramento: id_sacramento
+        },
+        { transaction: t }
+      );
+    }
+
+    // 5️⃣ Confirmar transacción
+    await t.commit();
+
+    return res.json({
+      ok: true,
+      msg: "Sacramento actualizado correctamente",
+      id_sacramento
+    });
+
+  } catch (error) {
+    await t.rollback();
+    console.error("Error al actualizar sacramento completo:", error);
+    return res.status(500).json({
+      ok: false,
+      msg: "Error al actualizar el sacramento"
+    });
+  }
+};
+
+
 
   module.exports = {
     getSacramentos,
@@ -323,5 +611,8 @@ const crearSacramentoCompleto = async (req, res) => {
     actualizarSacramento,
     eliminarSacramento,
     getAllSacramentos,
-    crearSacramentoCompleto
+    crearSacramentoCompleto,
+    buscarSacramentosPorPersona,
+    getSacramentoCompleto,
+    actualizarSacramentoCompleto
   };
