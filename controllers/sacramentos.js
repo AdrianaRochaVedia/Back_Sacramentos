@@ -385,13 +385,11 @@ const buscarSacramentosPorPersona = async (req, res) => {
             }
           ]
         },
-
         // Info del tipo de sacramento
         {
           model: TipoSacramento,
           as: "tipoSacramento"
         },
-
         // Info parroquia
         {
           model: Parroquia,
@@ -420,6 +418,20 @@ const buscarSacramentosPorPersona = async (req, res) => {
 
       return !coincideConUsuario;
     });
+
+    // 🟦 Obtener todas las relaciones completas (padrinos, ministros, etc.)
+    for (const s of filtrados) {
+      const relaciones = await PersonaSacramento.findAll({
+        where: { sacramento_id_sacramento: s.id_sacramento },
+        include: [
+          { model: Persona, as: "persona" },
+          { model: RolSacramento, as: "rolSacramento" }
+        ]
+      });
+
+      // Agregar al objeto final sin reemplazar personaSacramentos
+      s.dataValues.todasRelaciones = relaciones;
+    }
 
     return res.json({
       ok: true,
@@ -539,24 +551,41 @@ const actualizarSacramentoCompleto = async (req, res) => {
   try {
     const id_sacramento = req.params.id;
 
-    const {
-      fecha_sacramento,
-      foja,
-      numero,
-      tipo_sacramento_id_tipo,
-      parroquiaId,
-      relaciones
-    } = req.body;
+    
+
+    let {
+    fecha_sacramento,
+    foja,
+    numero,
+    tipo_sacramento_id_tipo,
+    parroquiaId,
+    relaciones
+  } = req.body;
+
+  // Asegurar que relaciones sea array real
+  if (typeof relaciones === "string") {
+    try {
+      relaciones = JSON.parse(relaciones);
+    } catch (err) {
+      return res.status(400).json({ ok: false, msg: "Relaciones mal formateadas" });
+    }
+  }
+
+if (!relaciones || !Array.isArray(relaciones)) {
+  return res.status(400).json({ ok: false, msg: "Formato inválido en relaciones" });
+}
 
     const usuario_id_usuario = req.uid; // del JWT
+    
+
+    console.log("BODY RAW :", req.body);
+    console.log("TIPO DE RELACIONES:", typeof req.body.relaciones);
 
     if (!usuario_id_usuario) {
       return res.status(400).json({ ok: false, msg: "Usuario no autenticado" });
     }
 
-    if (!relaciones || !Array.isArray(relaciones)) {
-      return res.status(400).json({ ok: false, msg: "Formato inválido en relaciones" });
-    }
+    
 
     // 1️⃣ Verificar si el sacramento existe
     const sacramento = await Sacramento.findOne({
@@ -583,24 +612,52 @@ const actualizarSacramentoCompleto = async (req, res) => {
       { where: { id_sacramento }, transaction: t }
     );
 
-    // 3️⃣ Eliminar relaciones antiguas
-    await PersonaSacramento.destroy(
-      {
-        where: { sacramento_id_sacramento: id_sacramento }
-      },
-      { transaction: t }
-    );
+    // 3️⃣ Obtener relaciones actuales
+    const relacionesActuales = await PersonaSacramento.findAll({
+      where: { sacramento_id_sacramento: id_sacramento },
+      transaction: t
+    });
 
-    // 4️⃣ Crear nuevas relaciones
+    // Crear mapas para comparación
+    const mapActuales = new Map();
+    for (const r of relacionesActuales) {
+      mapActuales.set(r.rol_sacramento_id_rol_sacra, r);
+    }
+
+    const rolesNuevos = new Set();
+    
+    // 4️⃣ Procesar nuevas relaciones (crear o actualizar)
     for (const rel of relaciones) {
-      await PersonaSacramento.create(
-        {
-          persona_id_persona: rel.persona_id,
-          rol_sacramento_id_rol_sacra: rel.rol_sacramento_id,
-          sacramento_id_sacramento: id_sacramento
-        },
-        { transaction: t }
-      );
+      const existente = mapActuales.get(rel.rol_sacramento_id);
+
+      rolesNuevos.add(rel.rol_sacramento_id);
+
+      if (existente) {
+        // Si existe, actualizar solo si cambió la persona
+        if (existente.persona_id_persona !== rel.persona_id) {
+          await existente.update(
+            { persona_id_persona: rel.persona_id },
+            { transaction: t }
+          );
+        }
+      } else {
+        // Si no existe, crear la relación
+        await PersonaSacramento.create(
+          {
+            persona_id_persona: rel.persona_id,
+            rol_sacramento_id_rol_sacra: rel.rol_sacramento_id,
+            sacramento_id_sacramento: id_sacramento
+          },
+          { transaction: t }
+        );
+      }
+    }
+
+    // 5️⃣ Eliminar solo las relaciones que ya no deben existir
+    for (const r of relacionesActuales) {
+      if (!rolesNuevos.has(r.rol_sacramento_id_rol_sacra)) {
+        await r.destroy({ transaction: t });
+      }
     }
 
     // 5️⃣ Confirmar transacción
