@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const { Op } = require('sequelize');
 const Auditoria = require('../models/Auditoria');
+const Usuario = require('../models/Usuario'); // <--- IMPORTANTE agregado
 const { validarJWT } = require('../middlewares/validar-jwt');
 
 const router = Router();
@@ -20,19 +21,6 @@ function daysAgo(n) {
 
 /**
  * GET /api/auditoria
- * Filtros opcionales:
- *  start_date, end_date (ISO)
- *  user_name (ILIKE %...%)
- *  http_method (GET/POST/PUT/DELETE...)
- *  http_status_code (int)
- *  application_name (ILIKE %...%)
- *  url (ILIKE %...%)
- *  user_agent (ILIKE %...%)
- *  min_duration, max_duration (ms)
- *  ip_address (igual)
- *  correlation_id (igual)
- *  has_exception (true/false)
- *  page, limit
  */
 router.get('/', validarJWT, async (req, res) => {
   try {
@@ -64,6 +52,7 @@ router.get('/', validarJWT, async (req, res) => {
       start_date = base;
     }
 
+    // Construcción de filtros
     const where = {};
     if (start_date || end_date) {
       where.fecha_inicio = {};
@@ -97,7 +86,6 @@ router.get('/', validarJWT, async (req, res) => {
     }
 
     if (ip_address && ip_address.trim()) {
-      // Búsqueda exacta de IP (si necesitas contiene, cámbialo a iLike)
       where.ip_address = ip_address.trim();
     }
 
@@ -105,7 +93,6 @@ router.get('/', validarJWT, async (req, res) => {
       where.correlation_id = correlation_id.trim();
     }
 
-    // Duración opcional
     if (min_duration || max_duration) {
       where.duracion_ms = {};
       const min = Number(min_duration);
@@ -123,6 +110,7 @@ router.get('/', validarJWT, async (req, res) => {
     const perPage = Math.min(parseInt(limit, 10) || 50, 500);
     const offset  = (pageNum - 1) * perPage;
 
+    // Consulta principal
     const { rows, count } = await Auditoria.findAndCountAll({
       where,
       order: [['fecha_inicio', 'DESC']],
@@ -130,12 +118,39 @@ router.get('/', validarJWT, async (req, res) => {
       offset,
     });
 
+    // Enriquecer logs con nombre_usuario sin modificar BD
+    const dataEnriched = await Promise.all(
+      rows.map(async (r) => {
+        let nombre_usuario = null;
+
+        if (r.username) {
+          const user = await Usuario.findOne({ where: { email: r.username } });
+
+          if (user) {
+            nombre_usuario = [
+              user.nombre,
+              user.apellido_paterno,
+              user.apellido_materno
+            ]
+            .filter(Boolean)
+            .join(" ");
+          }
+        }
+
+        return {
+          ...r.dataValues,
+          nombre_usuario,  // <------- agregado aquí
+        };
+      })
+    );
+
+    // Respuesta final
     res.json({
       ok: true,
       total: count,
       page: pageNum,
       limit: perPage,
-      data: rows,
+      data: dataEnriched,
       applied_filters: {
         start_date: start_date?.toISOString(),
         end_date: end_date?.toISOString(),
