@@ -551,24 +551,41 @@ const actualizarSacramentoCompleto = async (req, res) => {
   try {
     const id_sacramento = req.params.id;
 
-    const {
-      fecha_sacramento,
-      foja,
-      numero,
-      tipo_sacramento_id_tipo,
-      parroquiaId,
-      relaciones
-    } = req.body;
+    
+
+    let {
+    fecha_sacramento,
+    foja,
+    numero,
+    tipo_sacramento_id_tipo,
+    parroquiaId,
+    relaciones
+  } = req.body;
+
+  // Asegurar que relaciones sea array real
+  if (typeof relaciones === "string") {
+    try {
+      relaciones = JSON.parse(relaciones);
+    } catch (err) {
+      return res.status(400).json({ ok: false, msg: "Relaciones mal formateadas" });
+    }
+  }
+
+if (!relaciones || !Array.isArray(relaciones)) {
+  return res.status(400).json({ ok: false, msg: "Formato inválido en relaciones" });
+}
 
     const usuario_id_usuario = req.uid; // del JWT
+    
+
+    console.log("BODY RAW :", req.body);
+    console.log("TIPO DE RELACIONES:", typeof req.body.relaciones);
 
     if (!usuario_id_usuario) {
       return res.status(400).json({ ok: false, msg: "Usuario no autenticado" });
     }
 
-    if (!relaciones || !Array.isArray(relaciones)) {
-      return res.status(400).json({ ok: false, msg: "Formato inválido en relaciones" });
-    }
+    
 
     // 1️⃣ Verificar si el sacramento existe
     const sacramento = await Sacramento.findOne({
