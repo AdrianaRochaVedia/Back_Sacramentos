@@ -4,7 +4,7 @@ const requisitosSacramentales = {
     requeridos: []            // no necesita sacramentos previos
   },
   Comunion: {
-    excluir: ["COMULGADO"],
+    excluir: ["CONFIRMADO"],
     requeridos: ["BAUTIZADO"]
   },
   Confirmacion: {
@@ -13,7 +13,7 @@ const requisitosSacramentales = {
   },
   Matrimonio: {
     excluir: ["CASADO"],
-    requeridos: ["BAUTIZADO"]  // opcional
+    requeridos: ["BAUTIZADO", "CONFIRMADO"]  // opcional
   }
 };
 

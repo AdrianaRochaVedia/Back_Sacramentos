@@ -598,7 +598,7 @@ if (!relaciones || !Array.isArray(relaciones)) {
         .json({ ok: false, msg: "Sacramento no encontrado" });
     }
 
-    // 2️⃣ Actualizar datos principales del sacramento
+    // Actualizar datos principales del sacramento
     await Sacramento.update(
       {
         fecha_sacramento,
