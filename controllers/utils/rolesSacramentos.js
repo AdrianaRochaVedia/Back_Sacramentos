@@ -6,7 +6,7 @@ const requisitosRoles = {
   ministro: {
     requeridos: ["BAUTIZADO", "CONFIRMADO"],
     excluir: []
-  }
+  },
 };
 
 module.exports = requisitosRoles;
