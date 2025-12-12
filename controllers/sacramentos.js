@@ -419,7 +419,7 @@ const buscarSacramentosPorPersona = async (req, res) => {
       return !coincideConUsuario;
     });
 
-    // 🟦 Obtener todas las relaciones completas (padrinos, ministros, etc.)
+    //  Obtener todas las relaciones completas (padrinos, ministros, etc.)
     for (const s of filtrados) {
       const relaciones = await PersonaSacramento.findAll({
         where: { sacramento_id_sacramento: s.id_sacramento },
@@ -450,7 +450,6 @@ const buscarSacramentosPorPersona = async (req, res) => {
     });
   }
 };
-// 
 // para identificar candidatos a sacerdote
 const buscarPersonasConTodosLosSacramentos = async (req, res) => {
   try {
