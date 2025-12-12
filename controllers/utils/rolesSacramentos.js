@@ -6,6 +6,10 @@ const requisitosRoles = {
   ministro: {
     requeridos: ["BAUTIZADO", "CONFIRMADO"],
     excluir: []
+  },
+  encargado: {
+    requeridos: ["BAUTIZADO", "CONFIRMADO"],
+    excluir: ["CASADO"]
   }
 };
 
