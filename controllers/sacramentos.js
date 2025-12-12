@@ -454,9 +454,10 @@ const buscarSacramentosPorPersona = async (req, res) => {
 // para identificar candidatos a sacerdote
 const buscarPersonasConTodosLosSacramentos = async (req, res) => {
   try {
+    // IDs de tipos de sacramento
     const ID_BAUTIZO = 1;
-    const ID_COMUNION = 2;
-    const ID_MATRIMONIO = 3;
+    const ID_COMUNION = 3;
+    const ID_MATRIMONIO = 2;
 
     const {
       sacerdote = "false",
@@ -468,7 +469,7 @@ const buscarPersonasConTodosLosSacramentos = async (req, res) => {
       carnet_identidad
     } = req.query;
 
-    // 1️⃣ Personas con Bautizo
+    // 1️⃣ Personas bautizadas
     const bautizados = await PersonaSacramento.findAll({
       where: { rol_sacramento_id_rol_sacra: 1 },
       include: [{
@@ -478,9 +479,9 @@ const buscarPersonasConTodosLosSacramentos = async (req, res) => {
       }]
     });
 
-    // 2️⃣ Personas con Primera Comunión
-    const comunion = await PersonaSacramento.findAll({
-      where: { rol_sacramento_id_rol_sacra: 4 },
+    // 2️⃣ Personas confirmadas (Primera Comunión)
+    const confirmados = await PersonaSacramento.findAll({
+      where: { rol_sacramento_id_rol_sacra: 10 },
       include: [{
         model: Sacramento,
         as: "sacramento",
@@ -488,9 +489,13 @@ const buscarPersonasConTodosLosSacramentos = async (req, res) => {
       }]
     });
 
-    // 3️⃣ Personas con Matrimonio
+    // 3️⃣ Personas casadas (esposo o esposa)
     const matrimonios = await PersonaSacramento.findAll({
-      where: { rol_sacramento_id_rol_sacra: 2 },
+      where: {
+        rol_sacramento_id_rol_sacra: {
+          [Op.in]: [2, 3] // esposo o esposa
+        }
+      },
       include: [{
         model: Sacramento,
         as: "sacramento",
@@ -498,15 +503,17 @@ const buscarPersonasConTodosLosSacramentos = async (req, res) => {
       }]
     });
 
+    // Sets de IDs
     const setBautizo = new Set(bautizados.map(b => b.persona_id_persona));
-    const setComunion = new Set(comunion.map(c => c.persona_id_persona));
+    const setConfirmado = new Set(confirmados.map(c => c.persona_id_persona));
     const setMatrimonio = new Set(matrimonios.map(m => m.persona_id_persona));
 
+    // Intersección correcta
     const idsFinales = [...setBautizo].filter(
-      id => setComunion.has(id) && setMatrimonio.has(id)
+      id => setConfirmado.has(id) && setMatrimonio.has(id)
     );
 
-    // 4️⃣ Construcción dinámica de filtros de Persona
+    // 4️⃣ Filtros dinámicos de Persona
     const filtrosPersona = {};
 
     if (search) {
@@ -525,13 +532,18 @@ const buscarPersonasConTodosLosSacramentos = async (req, res) => {
       filtrosPersona.carnet_identidad = { [Op.like]: `%${ci || carnet_identidad}%` };
     }
 
-    // 5️⃣ Consulta final a Persona
+    // 
     const personas = await Persona.findAll({
       where: {
         id_persona: idsFinales,
-        ...(sacerdote === "false" ? { sacerdote: false } : {}),
+        ...(sacerdote === "false" ? { sacerdote: false } : { sacerdote: true }),
         ...filtrosPersona
-      }
+      },
+      order: [
+        ['apellido_paterno', 'ASC'],
+        ['apellido_materno', 'ASC'],
+        ['nombre', 'ASC']
+      ]
     });
 
     return res.json({
