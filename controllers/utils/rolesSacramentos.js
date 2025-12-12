@@ -7,10 +7,6 @@ const requisitosRoles = {
     requeridos: ["BAUTIZADO", "CONFIRMADO"],
     excluir: []
   },
-  encargado: {
-    requeridos: ["BAUTIZADO", "CONFIRMADO"],
-    excluir: ["CASADO"]
-  }
 };
 
 module.exports = requisitosRoles;

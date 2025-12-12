@@ -14,6 +14,11 @@ const requisitosSacramentales = {
   Matrimonio: {
     excluir: ["CASADO"],
     requeridos: ["BAUTIZADO", "CONFIRMADO"]  // opcional
+  },
+  //para que pueda buscarse un sacerdote
+  Sacerdocio: {
+    excluir: [],
+    requeridos: ["BAUTIZADO", "CONFIRMADO","ESPOSO"]
   }
 };
 

@@ -450,6 +450,106 @@ const buscarSacramentosPorPersona = async (req, res) => {
     });
   }
 };
+// 
+// para identificar candidatos a sacerdote
+const buscarPersonasConTodosLosSacramentos = async (req, res) => {
+  try {
+    const ID_BAUTIZO = 1;
+    const ID_COMUNION = 2;
+    const ID_MATRIMONIO = 3;
+
+    const {
+      sacerdote = "false",
+      search,
+      nombre,
+      apellido_paterno,
+      apellido_materno,
+      ci,
+      carnet_identidad
+    } = req.query;
+
+    // 1️⃣ Personas con Bautizo
+    const bautizados = await PersonaSacramento.findAll({
+      where: { rol_sacramento_id_rol_sacra: 1 },
+      include: [{
+        model: Sacramento,
+        as: "sacramento",
+        where: { tipo_sacramento_id_tipo: ID_BAUTIZO, activo: true }
+      }]
+    });
+
+    // 2️⃣ Personas con Primera Comunión
+    const comunion = await PersonaSacramento.findAll({
+      where: { rol_sacramento_id_rol_sacra: 4 },
+      include: [{
+        model: Sacramento,
+        as: "sacramento",
+        where: { tipo_sacramento_id_tipo: ID_COMUNION, activo: true }
+      }]
+    });
+
+    // 3️⃣ Personas con Matrimonio
+    const matrimonios = await PersonaSacramento.findAll({
+      where: { rol_sacramento_id_rol_sacra: 2 },
+      include: [{
+        model: Sacramento,
+        as: "sacramento",
+        where: { tipo_sacramento_id_tipo: ID_MATRIMONIO, activo: true }
+      }]
+    });
+
+    const setBautizo = new Set(bautizados.map(b => b.persona_id_persona));
+    const setComunion = new Set(comunion.map(c => c.persona_id_persona));
+    const setMatrimonio = new Set(matrimonios.map(m => m.persona_id_persona));
+
+    const idsFinales = [...setBautizo].filter(
+      id => setComunion.has(id) && setMatrimonio.has(id)
+    );
+
+    // 4️⃣ Construcción dinámica de filtros de Persona
+    const filtrosPersona = {};
+
+    if (search) {
+      filtrosPersona[Op.or] = [
+        { nombre: { [Op.like]: `%${search}%` } },
+        { apellido_paterno: { [Op.like]: `%${search}%` } },
+        { apellido_materno: { [Op.like]: `%${search}%` } },
+        { carnet_identidad: { [Op.like]: `%${search}%` } }
+      ];
+    }
+
+    if (nombre) filtrosPersona.nombre = { [Op.like]: `%${nombre}%` };
+    if (apellido_paterno) filtrosPersona.apellido_paterno = { [Op.like]: `%${apellido_paterno}%` };
+    if (apellido_materno) filtrosPersona.apellido_materno = { [Op.like]: `%${apellido_materno}%` };
+    if (ci || carnet_identidad) {
+      filtrosPersona.carnet_identidad = { [Op.like]: `%${ci || carnet_identidad}%` };
+    }
+
+    // 5️⃣ Consulta final a Persona
+    const personas = await Persona.findAll({
+      where: {
+        id_persona: idsFinales,
+        ...(sacerdote === "false" ? { sacerdote: false } : {}),
+        ...filtrosPersona
+      }
+    });
+
+    return res.json({
+      ok: true,
+      total: personas.length,
+      personas
+    });
+
+  } catch (error) {
+    console.error("Error en buscarPersonasConTodosLosSacramentos:", error);
+    res.status(500).json({
+      ok: false,
+      msg: "Error al buscar personas con todos los sacramentos",
+      error: error.message
+    });
+  }
+};
+ 
 //para obtener los datos del sacramento y las personas relacionadas
 // Obtener un sacramento con TODAS sus relaciones para editar
 const getSacramentoCompleto = async (req, res) => {
@@ -691,5 +791,6 @@ if (!relaciones || !Array.isArray(relaciones)) {
     crearSacramentoCompleto,
     buscarSacramentosPorPersona,
     getSacramentoCompleto,
-    actualizarSacramentoCompleto
+    actualizarSacramentoCompleto,
+    buscarPersonasConTodosLosSacramentos
   };
