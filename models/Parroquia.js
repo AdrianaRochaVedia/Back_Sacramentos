@@ -1,6 +1,7 @@
 // models/Usuario.js
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../database/config');
+const persona = require('./Persona');
 
 const Parroquia = sequelize.define('Parroquia', {
   id_parroquia: {
@@ -25,7 +26,15 @@ const Parroquia = sequelize.define('Parroquia', {
     type: DataTypes.STRING(100),
     allowNull: false,   
     unique: true
+    },
+    id_persona: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: persona,
+      key: 'id_persona'
     }
+  }
 
 }, {
   tableName: 'institucion_parroquia',
