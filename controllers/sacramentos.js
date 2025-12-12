@@ -8,6 +8,7 @@ const Persona = require('../models/Persona');
 const RolSacramento = require('../models/RolSacramento');
 const { Op } = require('sequelize');
 const { combinarCondiciones } = require('../middlewares/busqueda');
+const MatrimonioDetalle = require('../models/MatrimonioDetalle');
 
 
 // Obtener todos los sacramentos activos
@@ -609,6 +610,12 @@ const getSacramentoCompleto = async (req, res) => {
         {
           model: Usuario,
           as: "usuario"
+        },
+        // Matrimonio Detalle (condicional)
+        {
+          model: MatrimonioDetalle,
+          as: 'matrimonioDetalle',
+          required: false
         }
       ]
     });
@@ -630,6 +637,11 @@ const getSacramentoCompleto = async (req, res) => {
       rol_nombre: r.rol.nombre
     }));
 
+    let matrimonioDetalle = null;
+    if (sacramento.tipoSacramento.id_tipo === 2 && sacramento.matrimonioDetalle) {
+      matrimonioDetalle = sacramento.matrimonioDetalle;
+    }
+
     res.json({
       ok: true,
       sacramento: {
@@ -649,7 +661,8 @@ const getSacramentoCompleto = async (req, res) => {
           id: sacramento.usuario.id_usuario,
           nombre: sacramento.usuario.nombre
         },
-        relaciones
+        relaciones,
+        matrimonio_detalle: matrimonioDetalle
       }
     });
 
