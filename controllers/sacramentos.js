@@ -265,7 +265,8 @@ const crearSacramentoCompleto = async (req, res) => {
       numero,
       tipo_sacramento_id_tipo,
       parroquiaId,
-      relaciones
+      relaciones,
+      matrimonioDetalle
     } = req.body;
 
     // usuario autenticado
@@ -293,6 +294,22 @@ const crearSacramentoCompleto = async (req, res) => {
     }, { transaction: t });
 
     const id_sacramento = nuevo.id_sacramento;
+
+    // 💍 Crear MatrimonioDetalle si el sacramento es Matrimonio
+    if (Number(tipo_sacramento_id_tipo) === 2) {
+      console.log("💍 Creando MatrimonioDetalle para sacramento:", id_sacramento);
+
+      if (!matrimonioDetalle || typeof matrimonioDetalle !== "object") {
+        throw new Error("Datos de matrimonioDetalle no enviados o inválidos");
+      }
+
+      await MatrimonioDetalle.create({
+        sacramento_id_sacramento: id_sacramento,
+        ...matrimonioDetalle
+      }, { transaction: t });
+
+      console.log("✅ MatrimonioDetalle creado correctamente");
+    }
 
     // Crear relaciones en persona_sacramento
     for (const rel of relaciones) {
@@ -712,32 +729,31 @@ const actualizarSacramentoCompleto = async (req, res) => {
   try {
     const id_sacramento = req.params.id;
 
-    
-
+    // 1️⃣ Extraer todos los datos del body, incluyendo matrimonioDetalle
     let {
-    fecha_sacramento,
-    foja,
-    numero,
-    tipo_sacramento_id_tipo,
-    parroquiaId,
-    relaciones
-  } = req.body;
+      fecha_sacramento,
+      foja,
+      numero,
+      tipo_sacramento_id_tipo,
+      parroquiaId,
+      relaciones,
+      matrimonioDetalle
+    } = req.body;
 
-  // Asegurar que relaciones sea array real
-  if (typeof relaciones === "string") {
-    try {
-      relaciones = JSON.parse(relaciones);
-    } catch (err) {
-      return res.status(400).json({ ok: false, msg: "Relaciones mal formateadas" });
+    // Asegurar que relaciones sea array real
+    if (typeof relaciones === "string") {
+      try {
+        relaciones = JSON.parse(relaciones);
+      } catch (err) {
+        return res.status(400).json({ ok: false, msg: "Relaciones mal formateadas" });
+      }
     }
-  }
 
-if (!relaciones || !Array.isArray(relaciones)) {
-  return res.status(400).json({ ok: false, msg: "Formato inválido en relaciones" });
-}
+    if (!relaciones || !Array.isArray(relaciones)) {
+      return res.status(400).json({ ok: false, msg: "Formato inválido en relaciones" });
+    }
 
     const usuario_id_usuario = req.uid; // del JWT
-    
 
     console.log("BODY RAW :", req.body);
     console.log("TIPO DE RELACIONES:", typeof req.body.relaciones);
@@ -745,8 +761,6 @@ if (!relaciones || !Array.isArray(relaciones)) {
     if (!usuario_id_usuario) {
       return res.status(400).json({ ok: false, msg: "Usuario no autenticado" });
     }
-
-    
 
     // 1️⃣ Verificar si el sacramento existe
     const sacramento = await Sacramento.findOne({
@@ -773,34 +787,60 @@ if (!relaciones || !Array.isArray(relaciones)) {
       { where: { id_sacramento }, transaction: t }
     );
 
+    // 💍 Actualizar / crear MatrimonioDetalle si es Matrimonio
+    if (Number(tipo_sacramento_id_tipo) === 2) {
+      console.log("💍 Actualizando MatrimonioDetalle para sacramento:", id_sacramento);
+
+      if (!matrimonioDetalle || typeof matrimonioDetalle !== "object") {
+        throw new Error("Datos de matrimonioDetalle no enviados o inválidos");
+      }
+
+      const existente = await MatrimonioDetalle.findOne({
+        where: { sacramento_id_sacramento: id_sacramento },
+        transaction: t
+      });
+
+      if (existente) {
+        await existente.update(
+          { ...matrimonioDetalle },
+          { transaction: t }
+        );
+        console.log("✅ MatrimonioDetalle actualizado");
+      } else {
+        await MatrimonioDetalle.create(
+          {
+            sacramento_id_sacramento: id_sacramento,
+            ...matrimonioDetalle
+          },
+          { transaction: t }
+        );
+        console.log("✅ MatrimonioDetalle creado");
+      }
+    }
+
     // 3️⃣ Obtener relaciones actuales
     const relacionesActuales = await PersonaSacramento.findAll({
       where: { sacramento_id_sacramento: id_sacramento },
       transaction: t
     });
 
-    // Crear mapas para comparación
+    // Crear mapas para comparación (por rol + persona)
     const mapActuales = new Map();
     for (const r of relacionesActuales) {
-      mapActuales.set(r.rol_sacramento_id_rol_sacra, r);
+      const key = `${r.rol_sacramento_id_rol_sacra}-${r.persona_id_persona}`;
+      mapActuales.set(key, r);
     }
 
-    const rolesNuevos = new Set();
-    
+    const relacionesNuevas = new Set();
     // 4️⃣ Procesar nuevas relaciones (crear o actualizar)
     for (const rel of relaciones) {
-      const existente = mapActuales.get(rel.rol_sacramento_id);
-
-      rolesNuevos.add(rel.rol_sacramento_id);
+      const key = `${rel.rol_sacramento_id}-${rel.persona_id}`;
+      const existente = mapActuales.get(key);
+      relacionesNuevas.add(key);
 
       if (existente) {
-        // Si existe, actualizar solo si cambió la persona
-        if (existente.persona_id_persona !== rel.persona_id) {
-          await existente.update(
-            { persona_id_persona: rel.persona_id },
-            { transaction: t }
-          );
-        }
+        // Si existe, no hay nada que actualizar (ya está persona-rol)
+        // Si quieres actualizar algún otro campo, hazlo aquí
       } else {
         // Si no existe, crear la relación
         await PersonaSacramento.create(
@@ -816,7 +856,8 @@ if (!relaciones || !Array.isArray(relaciones)) {
 
     // 5️⃣ Eliminar solo las relaciones que ya no deben existir
     for (const r of relacionesActuales) {
-      if (!rolesNuevos.has(r.rol_sacramento_id_rol_sacra)) {
+      const key = `${r.rol_sacramento_id_rol_sacra}-${r.persona_id_persona}`;
+      if (!relacionesNuevas.has(key)) {
         await r.destroy({ transaction: t });
       }
     }
