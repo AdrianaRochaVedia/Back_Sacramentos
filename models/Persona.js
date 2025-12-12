@@ -50,7 +50,11 @@ const Persona = sequelize.define('Persona', {
   estado: {
     type: DataTypes.STRING(100),
     allowNull: false
-  }
+  },
+  sacerdote: {
+    type: DataTypes.BOOLEAN,
+    allowNull: true
+  },
 
 }, {
   tableName: 'persona',
