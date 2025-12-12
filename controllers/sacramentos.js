@@ -465,7 +465,8 @@ const buscarPersonasConTodosLosSacramentos = async (req, res) => {
       apellido_paterno,
       apellido_materno,
       ci,
-      carnet_identidad
+      carnet_identidad,
+      id_persona
     } = req.query;
 
     // 1️⃣ Personas bautizadas
@@ -516,12 +517,17 @@ const buscarPersonasConTodosLosSacramentos = async (req, res) => {
     const filtrosPersona = {};
 
     if (search) {
-      filtrosPersona[Op.or] = [
+      const orConditions = [
         { nombre: { [Op.like]: `%${search}%` } },
         { apellido_paterno: { [Op.like]: `%${search}%` } },
         { apellido_materno: { [Op.like]: `%${search}%` } },
         { carnet_identidad: { [Op.like]: `%${search}%` } }
       ];
+      // Si search es numérico, buscar también por id_persona exacto
+      if (!isNaN(search)) {
+        orConditions.push({ id_persona: Number(search) });
+      }
+      filtrosPersona[Op.or] = orConditions;
     }
 
     if (nombre) filtrosPersona.nombre = { [Op.like]: `%${nombre}%` };
@@ -530,6 +536,7 @@ const buscarPersonasConTodosLosSacramentos = async (req, res) => {
     if (ci || carnet_identidad) {
       filtrosPersona.carnet_identidad = { [Op.like]: `%${ci || carnet_identidad}%` };
     }
+    if (id_persona) filtrosPersona.id_persona = id_persona;
 
     // 
     const personas = await Persona.findAll({
