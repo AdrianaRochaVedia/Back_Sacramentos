@@ -420,8 +420,9 @@ const buscarSacramentosPorPersona = async (req, res) => {
       return !coincideConUsuario;
     });
 
-    //  Obtener todas las relaciones completas (padrinos, ministros, etc.)
+    //  Obtener todas las relaciones completas (padrinos, ministros, etc.) y MatrimonioDetalle si aplica
     for (const s of filtrados) {
+      // Relaciones completas
       const relaciones = await PersonaSacramento.findAll({
         where: { sacramento_id_sacramento: s.id_sacramento },
         include: [
@@ -430,8 +431,19 @@ const buscarSacramentosPorPersona = async (req, res) => {
         ]
       });
 
-      // Agregar al objeto final sin reemplazar personaSacramentos
       s.dataValues.todasRelaciones = relaciones;
+
+      // 💍 Buscar detalle de matrimonio SOLO si es matrimonio
+      if (s.tipoSacramento?.id_tipo === 2) {
+        const matrimonioDetalle = await MatrimonioDetalle.findOne({
+          where: {
+            sacramento_id_sacramento: s.id_sacramento
+          }
+        });
+        s.dataValues.matrimonioDetalle = matrimonioDetalle;
+      } else {
+        s.dataValues.matrimonioDetalle = null;
+      }
     }
 
     return res.json({
@@ -573,7 +585,10 @@ const buscarPersonasConTodosLosSacramentos = async (req, res) => {
 // Obtener un sacramento con TODAS sus relaciones para editar
 const getSacramentoCompleto = async (req, res) => {
   try {
+    // 1️⃣ Log de inicio y parámetros
+    console.log("🔎 getSacramentoCompleto INICIO");
     const { id } = req.params;
+    console.log("➡️ ID recibido:", id, "tipo:", typeof id);
 
     const sacramento = await Sacramento.findOne({
       where: { id_sacramento: id, activo: true },
@@ -593,32 +608,30 @@ const getSacramentoCompleto = async (req, res) => {
             }
           ]
         },
-
         // Tipo de sacramento
         {
           model: TipoSacramento,
           as: "tipoSacramento"
         },
-
         // Parroquia
         {
           model: Parroquia,
           as: "parroquia"
         },
-
         // Usuario
         {
           model: Usuario,
           as: "usuario"
         },
-        // Matrimonio Detalle (condicional)
-        {
-          model: MatrimonioDetalle,
-          as: 'matrimonioDetalle',
-          required: false
-        }
       ]
     });
+
+    // 2️⃣ Log después de buscar el sacramento
+    console.log("✅ Sacramento encontrado:", !!sacramento);
+    if (sacramento) {
+      console.log("🆔 ID Sacramento:", sacramento.id_sacramento);
+      console.log("📘 Tipo Sacramento:", sacramento.tipoSacramento?.id_tipo, "-", sacramento.tipoSacramento?.nombre);
+    }
 
     if (!sacramento) {
       return res.status(404).json({
@@ -637,10 +650,27 @@ const getSacramentoCompleto = async (req, res) => {
       rol_nombre: r.rol.nombre
     }));
 
-    let matrimonioDetalle = null;
-    if (sacramento.tipoSacramento.id_tipo === 2 && sacramento.matrimonioDetalle) {
-      matrimonioDetalle = sacramento.matrimonioDetalle;
+    // 6️⃣ (Opcional pero útil) Log del tipo antes de buscar MatrimonioDetalle
+    if (sacramento.tipoSacramento?.id_tipo !== 2) {
+      console.log("ℹ️ No es matrimonio, no debería haber detalle");
     }
+
+    // 3️⃣ Log antes de buscar MatrimonioDetalle
+    console.log("🔍 Buscando MatrimonioDetalle con sacramento_id_sacramento =", id);
+    const matrimonio_detalle = await MatrimonioDetalle.findOne({
+      where: { sacramento_id_sacramento : id },
+    });
+
+    // 4️⃣ Log del resultado de la búsqueda
+    if (matrimonio_detalle) {
+      console.log("💍 MatrimonioDetalle ENCONTRADO:", matrimonio_detalle.get({ plain: true }));
+    } else {
+      console.log("❌ MatrimonioDetalle NO encontrado para id:", id);
+    }
+
+    // 5️⃣ Log final antes del response
+    console.log("📤 Enviando respuesta al frontend");
+    console.log("📦 matrimonioDetalle enviado:", matrimonio_detalle);
 
     res.json({
       ok: true,
@@ -662,7 +692,7 @@ const getSacramentoCompleto = async (req, res) => {
           nombre: sacramento.usuario.nombre
         },
         relaciones,
-        matrimonio_detalle: matrimonioDetalle
+        matrimonioDetalle: matrimonio_detalle 
       }
     });
 
