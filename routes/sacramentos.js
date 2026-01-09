@@ -1,7 +1,7 @@
 const { Router } = require('express');
 const { check } = require('express-validator');
 const { validarCampos } = require('../middlewares/validar-campos');
-const { getAllSacramentos, crearSacramento, getSacramento, getSacramentos, actualizarSacramento, eliminarSacramento, crearSacramentoCompleto, buscarSacramentosPorPersona, getSacramentoCompleto, actualizarSacramentoCompleto } = require('../controllers/sacramentos');
+const { getAllSacramentos, crearSacramento, getSacramento, getSacramentos, actualizarSacramento, eliminarSacramento, crearSacramentoCompleto, buscarSacramentosPorPersona, getSacramentoCompleto, actualizarSacramentoCompleto, buscarPersonasConTodosLosSacramentos  } = require('../controllers/sacramentos');
 const { validarJWT } = require('../middlewares/validar-jwt');
 
 const router = Router();
@@ -24,7 +24,15 @@ router.get('/all', validarJWT, getAllSacramentos);
 
 router.get('/buscar-persona', 
     validarJWT,
-    buscarSacramentosPorPersona);
+    buscarSacramentosPorPersona
+);
+
+// 
+router.get('/buscar-sacerdotes/todos-sacramentos',
+    validarJWT,
+    buscarPersonasConTodosLosSacramentos
+);
+
 router.get('/completo/:id',
      validarJWT, 
      getSacramentoCompleto);

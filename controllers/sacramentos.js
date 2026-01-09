@@ -8,6 +8,7 @@ const Persona = require('../models/Persona');
 const RolSacramento = require('../models/RolSacramento');
 const { Op } = require('sequelize');
 const { combinarCondiciones } = require('../middlewares/busqueda');
+const MatrimonioDetalle = require('../models/MatrimonioDetalle');
 
 
 // Obtener todos los sacramentos activos
@@ -264,7 +265,8 @@ const crearSacramentoCompleto = async (req, res) => {
       numero,
       tipo_sacramento_id_tipo,
       parroquiaId,
-      relaciones
+      relaciones,
+      matrimonioDetalle
     } = req.body;
 
     // usuario autenticado
@@ -292,6 +294,22 @@ const crearSacramentoCompleto = async (req, res) => {
     }, { transaction: t });
 
     const id_sacramento = nuevo.id_sacramento;
+
+    // 💍 Crear MatrimonioDetalle si el sacramento es Matrimonio
+    if (Number(tipo_sacramento_id_tipo) === 2) {
+      console.log("💍 Creando MatrimonioDetalle para sacramento:", id_sacramento);
+
+      if (!matrimonioDetalle || typeof matrimonioDetalle !== "object") {
+        throw new Error("Datos de matrimonioDetalle no enviados o inválidos");
+      }
+
+      await MatrimonioDetalle.create({
+        sacramento_id_sacramento: id_sacramento,
+        ...matrimonioDetalle
+      }, { transaction: t });
+
+      console.log("✅ MatrimonioDetalle creado correctamente");
+    }
 
     // Crear relaciones en persona_sacramento
     for (const rel of relaciones) {
@@ -419,8 +437,9 @@ const buscarSacramentosPorPersona = async (req, res) => {
       return !coincideConUsuario;
     });
 
-    // 🟦 Obtener todas las relaciones completas (padrinos, ministros, etc.)
+    //  Obtener todas las relaciones completas (padrinos, ministros, etc.) y MatrimonioDetalle si aplica
     for (const s of filtrados) {
+      // Relaciones completas
       const relaciones = await PersonaSacramento.findAll({
         where: { sacramento_id_sacramento: s.id_sacramento },
         include: [
@@ -429,8 +448,19 @@ const buscarSacramentosPorPersona = async (req, res) => {
         ]
       });
 
-      // Agregar al objeto final sin reemplazar personaSacramentos
       s.dataValues.todasRelaciones = relaciones;
+
+      // 💍 Buscar detalle de matrimonio SOLO si es matrimonio
+      if (s.tipoSacramento?.id_tipo === 2) {
+        const matrimonioDetalle = await MatrimonioDetalle.findOne({
+          where: {
+            sacramento_id_sacramento: s.id_sacramento
+          }
+        });
+        s.dataValues.matrimonioDetalle = matrimonioDetalle;
+      } else {
+        s.dataValues.matrimonioDetalle = null;
+      }
     }
 
     return res.json({
@@ -450,11 +480,132 @@ const buscarSacramentosPorPersona = async (req, res) => {
     });
   }
 };
+// para identificar candidatos a sacerdote
+const buscarPersonasConTodosLosSacramentos = async (req, res) => {
+  try {
+    // IDs de tipos de sacramento
+    const ID_BAUTIZO = 1;
+    const ID_COMUNION = 3;
+    const ID_MATRIMONIO = 2;
+
+    const {
+      sacerdote = "false",
+      search,
+      nombre,
+      apellido_paterno,
+      apellido_materno,
+      ci,
+      carnet_identidad,
+      id_persona
+    } = req.query;
+
+    // 1️⃣ Personas bautizadas
+    const bautizados = await PersonaSacramento.findAll({
+      where: { rol_sacramento_id_rol_sacra: 1 },
+      include: [{
+        model: Sacramento,
+        as: "sacramento",
+        where: { tipo_sacramento_id_tipo: ID_BAUTIZO, activo: true }
+      }]
+    });
+
+    // 2️⃣ Personas confirmadas (Primera Comunión)
+    const confirmados = await PersonaSacramento.findAll({
+      where: { rol_sacramento_id_rol_sacra: 10 },
+      include: [{
+        model: Sacramento,
+        as: "sacramento",
+        where: { tipo_sacramento_id_tipo: ID_COMUNION, activo: true }
+      }]
+    });
+
+    // 3️⃣ Personas casadas (esposo o esposa)
+    const matrimonios = await PersonaSacramento.findAll({
+      where: {
+        rol_sacramento_id_rol_sacra: {
+          [Op.in]: [2, 3] // esposo o esposa
+        }
+      },
+      include: [{
+        model: Sacramento,
+        as: "sacramento",
+        where: { tipo_sacramento_id_tipo: ID_MATRIMONIO, activo: true }
+      }]
+    });
+
+    // Sets de IDs
+    const setBautizo = new Set(bautizados.map(b => b.persona_id_persona));
+    const setConfirmado = new Set(confirmados.map(c => c.persona_id_persona));
+    const setMatrimonio = new Set(matrimonios.map(m => m.persona_id_persona));
+
+    // Intersección correcta
+    const idsFinales = [...setBautizo].filter(
+      id => setConfirmado.has(id) && setMatrimonio.has(id)
+    );
+
+    // 4️⃣ Filtros dinámicos de Persona
+    const filtrosPersona = {};
+
+    if (search) {
+      const orConditions = [
+        { nombre: { [Op.like]: `%${search}%` } },
+        { apellido_paterno: { [Op.like]: `%${search}%` } },
+        { apellido_materno: { [Op.like]: `%${search}%` } },
+        { carnet_identidad: { [Op.like]: `%${search}%` } }
+      ];
+      // Si search es numérico, buscar también por id_persona exacto
+      if (!isNaN(search)) {
+        orConditions.push({ id_persona: Number(search) });
+      }
+      filtrosPersona[Op.or] = orConditions;
+    }
+
+    if (nombre) filtrosPersona.nombre = { [Op.like]: `%${nombre}%` };
+    if (apellido_paterno) filtrosPersona.apellido_paterno = { [Op.like]: `%${apellido_paterno}%` };
+    if (apellido_materno) filtrosPersona.apellido_materno = { [Op.like]: `%${apellido_materno}%` };
+    if (ci || carnet_identidad) {
+      filtrosPersona.carnet_identidad = { [Op.like]: `%${ci || carnet_identidad}%` };
+    }
+    if (id_persona) filtrosPersona.id_persona = id_persona;
+
+    // 
+    const personas = await Persona.findAll({
+      where: {
+        id_persona: idsFinales,
+        ...(sacerdote === "false" ? { sacerdote: false } : { sacerdote: true }),
+        ...filtrosPersona
+      },
+      order: [
+        ['apellido_paterno', 'ASC'],
+        ['apellido_materno', 'ASC'],
+        ['nombre', 'ASC']
+      ]
+    });
+
+    return res.json({
+      ok: true,
+      total: personas.length,
+      personas
+    });
+
+  } catch (error) {
+    console.error("Error en buscarPersonasConTodosLosSacramentos:", error);
+    res.status(500).json({
+      ok: false,
+      msg: "Error al buscar personas con todos los sacramentos",
+      error: error.message
+    });
+  }
+};
+ 
 //para obtener los datos del sacramento y las personas relacionadas
 // Obtener un sacramento con TODAS sus relaciones para editar
 const getSacramentoCompleto = async (req, res) => {
   try {
+    // 1️⃣ Log de inicio y parámetros
+    console.log("🔎 getSacramentoCompleto INICIO");
     const { id } = req.params;
+    console.log("➡️ ID recibido:", id, "tipo:", typeof id);
 
     const sacramento = await Sacramento.findOne({
       where: { id_sacramento: id, activo: true },
@@ -474,26 +625,30 @@ const getSacramentoCompleto = async (req, res) => {
             }
           ]
         },
-
         // Tipo de sacramento
         {
           model: TipoSacramento,
           as: "tipoSacramento"
         },
-
         // Parroquia
         {
           model: Parroquia,
           as: "parroquia"
         },
-
         // Usuario
         {
           model: Usuario,
           as: "usuario"
-        }
+        },
       ]
     });
+
+    // 2️⃣ Log después de buscar el sacramento
+    console.log("✅ Sacramento encontrado:", !!sacramento);
+    if (sacramento) {
+      console.log("🆔 ID Sacramento:", sacramento.id_sacramento);
+      console.log("📘 Tipo Sacramento:", sacramento.tipoSacramento?.id_tipo, "-", sacramento.tipoSacramento?.nombre);
+    }
 
     if (!sacramento) {
       return res.status(404).json({
@@ -511,6 +666,28 @@ const getSacramentoCompleto = async (req, res) => {
       rol_id: r.rol.id_rol_sacra,
       rol_nombre: r.rol.nombre
     }));
+
+    // 6️⃣ (Opcional pero útil) Log del tipo antes de buscar MatrimonioDetalle
+    if (sacramento.tipoSacramento?.id_tipo !== 2) {
+      console.log("ℹ️ No es matrimonio, no debería haber detalle");
+    }
+
+    // 3️⃣ Log antes de buscar MatrimonioDetalle
+    console.log("🔍 Buscando MatrimonioDetalle con sacramento_id_sacramento =", id);
+    const matrimonio_detalle = await MatrimonioDetalle.findOne({
+      where: { sacramento_id_sacramento : id },
+    });
+
+    // 4️⃣ Log del resultado de la búsqueda
+    if (matrimonio_detalle) {
+      console.log("💍 MatrimonioDetalle ENCONTRADO:", matrimonio_detalle.get({ plain: true }));
+    } else {
+      console.log("❌ MatrimonioDetalle NO encontrado para id:", id);
+    }
+
+    // 5️⃣ Log final antes del response
+    console.log("📤 Enviando respuesta al frontend");
+    console.log("📦 matrimonioDetalle enviado:", matrimonio_detalle);
 
     res.json({
       ok: true,
@@ -531,7 +708,8 @@ const getSacramentoCompleto = async (req, res) => {
           id: sacramento.usuario.id_usuario,
           nombre: sacramento.usuario.nombre
         },
-        relaciones
+        relaciones,
+        matrimonioDetalle: matrimonio_detalle 
       }
     });
 
@@ -551,32 +729,31 @@ const actualizarSacramentoCompleto = async (req, res) => {
   try {
     const id_sacramento = req.params.id;
 
-    
-
+    // 1️⃣ Extraer todos los datos del body, incluyendo matrimonioDetalle
     let {
-    fecha_sacramento,
-    foja,
-    numero,
-    tipo_sacramento_id_tipo,
-    parroquiaId,
-    relaciones
-  } = req.body;
+      fecha_sacramento,
+      foja,
+      numero,
+      tipo_sacramento_id_tipo,
+      parroquiaId,
+      relaciones,
+      matrimonioDetalle
+    } = req.body;
 
-  // Asegurar que relaciones sea array real
-  if (typeof relaciones === "string") {
-    try {
-      relaciones = JSON.parse(relaciones);
-    } catch (err) {
-      return res.status(400).json({ ok: false, msg: "Relaciones mal formateadas" });
+    // Asegurar que relaciones sea array real
+    if (typeof relaciones === "string") {
+      try {
+        relaciones = JSON.parse(relaciones);
+      } catch (err) {
+        return res.status(400).json({ ok: false, msg: "Relaciones mal formateadas" });
+      }
     }
-  }
 
-if (!relaciones || !Array.isArray(relaciones)) {
-  return res.status(400).json({ ok: false, msg: "Formato inválido en relaciones" });
-}
+    if (!relaciones || !Array.isArray(relaciones)) {
+      return res.status(400).json({ ok: false, msg: "Formato inválido en relaciones" });
+    }
 
     const usuario_id_usuario = req.uid; // del JWT
-    
 
     console.log("BODY RAW :", req.body);
     console.log("TIPO DE RELACIONES:", typeof req.body.relaciones);
@@ -584,8 +761,6 @@ if (!relaciones || !Array.isArray(relaciones)) {
     if (!usuario_id_usuario) {
       return res.status(400).json({ ok: false, msg: "Usuario no autenticado" });
     }
-
-    
 
     // 1️⃣ Verificar si el sacramento existe
     const sacramento = await Sacramento.findOne({
@@ -598,7 +773,7 @@ if (!relaciones || !Array.isArray(relaciones)) {
         .json({ ok: false, msg: "Sacramento no encontrado" });
     }
 
-    // 2️⃣ Actualizar datos principales del sacramento
+    // Actualizar datos principales del sacramento
     await Sacramento.update(
       {
         fecha_sacramento,
@@ -612,34 +787,60 @@ if (!relaciones || !Array.isArray(relaciones)) {
       { where: { id_sacramento }, transaction: t }
     );
 
+    // 💍 Actualizar / crear MatrimonioDetalle si es Matrimonio
+    if (Number(tipo_sacramento_id_tipo) === 2) {
+      console.log("💍 Actualizando MatrimonioDetalle para sacramento:", id_sacramento);
+
+      if (!matrimonioDetalle || typeof matrimonioDetalle !== "object") {
+        throw new Error("Datos de matrimonioDetalle no enviados o inválidos");
+      }
+
+      const existente = await MatrimonioDetalle.findOne({
+        where: { sacramento_id_sacramento: id_sacramento },
+        transaction: t
+      });
+
+      if (existente) {
+        await existente.update(
+          { ...matrimonioDetalle },
+          { transaction: t }
+        );
+        console.log("✅ MatrimonioDetalle actualizado");
+      } else {
+        await MatrimonioDetalle.create(
+          {
+            sacramento_id_sacramento: id_sacramento,
+            ...matrimonioDetalle
+          },
+          { transaction: t }
+        );
+        console.log("✅ MatrimonioDetalle creado");
+      }
+    }
+
     // 3️⃣ Obtener relaciones actuales
     const relacionesActuales = await PersonaSacramento.findAll({
       where: { sacramento_id_sacramento: id_sacramento },
       transaction: t
     });
 
-    // Crear mapas para comparación
+    // Crear mapas para comparación (por rol + persona)
     const mapActuales = new Map();
     for (const r of relacionesActuales) {
-      mapActuales.set(r.rol_sacramento_id_rol_sacra, r);
+      const key = `${r.rol_sacramento_id_rol_sacra}-${r.persona_id_persona}`;
+      mapActuales.set(key, r);
     }
 
-    const rolesNuevos = new Set();
-    
+    const relacionesNuevas = new Set();
     // 4️⃣ Procesar nuevas relaciones (crear o actualizar)
     for (const rel of relaciones) {
-      const existente = mapActuales.get(rel.rol_sacramento_id);
-
-      rolesNuevos.add(rel.rol_sacramento_id);
+      const key = `${rel.rol_sacramento_id}-${rel.persona_id}`;
+      const existente = mapActuales.get(key);
+      relacionesNuevas.add(key);
 
       if (existente) {
-        // Si existe, actualizar solo si cambió la persona
-        if (existente.persona_id_persona !== rel.persona_id) {
-          await existente.update(
-            { persona_id_persona: rel.persona_id },
-            { transaction: t }
-          );
-        }
+        // Si existe, no hay nada que actualizar (ya está persona-rol)
+        // Si quieres actualizar algún otro campo, hazlo aquí
       } else {
         // Si no existe, crear la relación
         await PersonaSacramento.create(
@@ -655,7 +856,8 @@ if (!relaciones || !Array.isArray(relaciones)) {
 
     // 5️⃣ Eliminar solo las relaciones que ya no deben existir
     for (const r of relacionesActuales) {
-      if (!rolesNuevos.has(r.rol_sacramento_id_rol_sacra)) {
+      const key = `${r.rol_sacramento_id_rol_sacra}-${r.persona_id_persona}`;
+      if (!relacionesNuevas.has(key)) {
         await r.destroy({ transaction: t });
       }
     }
@@ -691,5 +893,6 @@ if (!relaciones || !Array.isArray(relaciones)) {
     crearSacramentoCompleto,
     buscarSacramentosPorPersona,
     getSacramentoCompleto,
-    actualizarSacramentoCompleto
+    actualizarSacramentoCompleto,
+    buscarPersonasConTodosLosSacramentos
   };
