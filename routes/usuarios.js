@@ -29,11 +29,11 @@ router.post(
     [
         check('email', 'El email es obligatorio').isEmail(),
         check('password', 'La contraseña es obligatoria').notEmpty(),
+        check('turnstileToken', 'El token del captcha es obligatorio').notEmpty(),
         validarCampos
     ],
     loginUsuario
 );
-
 
 router.get('/renew', validarJWT, revalidarToken);
 

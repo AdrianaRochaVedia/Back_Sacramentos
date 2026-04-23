@@ -4,6 +4,7 @@ const Usuario = require('../models/Usuario');
 const { generarJWT } = require('../helpers/jwt');
 const decode = require('jsonwebtoken/decode');
 const { combinarCondiciones } = require('../middlewares/busqueda');
+const { verifyTurnstileToken } = require('../helpers/turnstile');
 
 
 // Obtener todos los usuarios activos
@@ -165,30 +166,39 @@ const crearUsuario = async (req, res) => {
 };
 
 
-//Login de usuario
 const loginUsuario = async (req, res) => {
-    const { email, password } = req.body;
+    const { email, password, turnstileToken } = req.body;
+
     try {
+      const captchaResult = await verifyTurnstileToken({
+        token: turnstileToken,
+        remoteip: req.ip
+      });
+
+      if (!captchaResult.ok) {
+        return res.status(400).json({
+          ok: false,
+          msg: captchaResult.msg,
+          errors: captchaResult.errors || []
+        });
+      }
+
       const usuario = await Usuario.findOne({ where: { email, activo: true } });
       if (!usuario) {
         return res.status(400).json({ ok: false, msg: 'Usuario no existe' });
       }
 
-      // Verificar si el usuario esta activo
-    if (!usuario.activo) {
-      return res.status(400).json({ ok: false, msg: 'El usuario está inactivo' });
-    }
+      if (!usuario.activo) {
+        return res.status(400).json({ ok: false, msg: 'El usuario está inactivo' });
+      }
 
+      const valid = bcrypt.compareSync(password, usuario.password);
+      if (!valid) {
+        return res.status(400).json({ ok: false, msg: 'Contraseña incorrecta' });
+      }
 
-    const valid = bcrypt.compareSync(password, usuario.password);
-    if (!valid) {
-      return res.status(400).json({ ok: false, msg: 'Contraseña incorrecta' });
-    }
-
-      //Generar el token
       const token = await generarJWT(usuario.id_usuario, usuario.email);
-      console.log(decode(token, { complete: true }));
-      
+
       res.json({
         ok: true,
         uid: usuario.id_usuario,
@@ -201,8 +211,7 @@ const loginUsuario = async (req, res) => {
       console.error(err);
       res.status(500).json({ ok: false, msg: 'Hable con el administrador' });
     }
-  };
-
+};
 // Obtener un usuario por ID
 const getUsuario = async (req, res) => {
     const { id } = req.params;
