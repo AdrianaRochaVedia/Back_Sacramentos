@@ -1,12 +1,16 @@
 const { response } = require('express');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto'); 
 const Usuario = require('../models/Usuario');
 const Rol = require('../models/Rol');
+const ConfiguracionSeguridad = require('../models/ConfiguracionSeguridad');
 const { generarJWT } = require('../helpers/jwt');
-const decode = require('jsonwebtoken/decode');
 const { combinarCondiciones } = require('../middlewares/busqueda');
 const { verifyTurnstileToken } = require('../helpers/turnstile');
-
+const { passwordFuerte } = require('../helpers/validar-password');
+const { verificarBloqueo, registrarIntentoFallido, resetearIntentos } = require('../helpers/seguridad/manejarIntentos');
+const { verificarHistorial, guardarEnHistorial } = require('../helpers/seguridad/manejarHistorial');
+const verificarExpiracion = require('../helpers/seguridad/verificarExpiracion');
 
 // Obtener todos los usuarios activos
 const getUsuarios = async (req, res) => {
@@ -16,26 +20,23 @@ const getUsuarios = async (req, res) => {
         const offset = (page - 1) * limit;
         
         const { 
-            search,
-            nombre,
-            apellido_paterno,
-            apellido_materno,
-            email,
-            fecha_nacimiento,
-            activo,
-            rol
+          search, 
+          nombre, 
+          apellido_paterno, 
+          apellido_materno, 
+          email, 
+          fecha_nacimiento, 
+          activo, 
+          rol 
         } = req.query;
-  
 
         const camposBusqueda = [
-            'nombre',
-            'apellido_paterno',
-            'apellido_materno',
-            'email',
-            'fecha_nacimiento',
-            //'rol'
+          'nombre', 
+          'apellido_paterno', 
+          'apellido_materno', 
+          'email', 
+          'fecha_nacimiento'
         ];
-        
 
         const filtros = {
             nombre,
@@ -43,28 +44,24 @@ const getUsuarios = async (req, res) => {
             apellido_materno,
             email,
             fecha_nacimiento,
-            //rol,
             activo: activo !== undefined ? activo : true
         };
         
         const whereConditions = combinarCondiciones(search, camposBusqueda, filtros);
-
         const whereRol = rol ? { nombre: rol } : {};
 
         const { count, rows } = await Usuario.findAndCountAll({
             where: whereConditions,
-            include: [
-                {
-                    model: Rol,
-                    as: 'rol',
-                    attributes: ['id_rol', 'nombre'],
-                    where: whereRol,
-                    required: !!rol  
-                }
-            ],
+            include: [{
+                model: Rol,
+                as: 'rol',
+                attributes: ['id_rol', 'nombre'],
+                where: whereRol,
+                required: !!rol
+            }],
             offset,
             limit,
-            order: [['apellido_paterno', 'ASC'], ['apellido_materno', 'ASC'], ['nombre', 'ASC'], ['rol', 'ASC'], ['email', 'ASC']]
+            order: [['apellido_paterno', 'ASC'], ['apellido_materno', 'ASC'], ['nombre', 'ASC'], ['email', 'ASC']]
         });
 
         res.json({
@@ -73,24 +70,12 @@ const getUsuarios = async (req, res) => {
             totalItems: count,
             totalPages: Math.ceil(count / limit),
             currentPage: page,
-            filtros_aplicados: {
-                search,
-                nombre,
-                apellido_paterno,
-                apellido_materno,
-                email,
-                fecha_nacimiento,
-                rol,
-                activo
-            }
+            filtros_aplicados: { search, nombre, apellido_paterno, apellido_materno, email, fecha_nacimiento, rol, activo }
         });
 
     } catch (error) {
         console.error(error);
-        res.status(500).json({
-            ok: false,
-            msg: 'Error al obtener los usuarios'
-        });
+        res.status(500).json({ ok: false, msg: 'Error al obtener los usuarios' });
     }
 };
 
@@ -121,77 +106,100 @@ const getAllUsuarios = async (req, res) => {
     }
 };
 
+// Obtener un usuario por ID
+const getUsuario = async (req, res) => {
+    const { id } = req.params;
+    try {
+        const usuario = await Usuario.findOne({
+            where: { id_usuario: id, activo: true },
+            include: [{ model: Rol, as: 'rol', attributes: ['id_rol', 'nombre'] }]
+        });
+        if (!usuario) {
+            return res.status(404).json({ ok: false, msg: 'Usuario no encontrado' });
+        }
+        res.json({ ok: true, usuario });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ ok: false, msg: 'Error al obtener usuario' });
+    }
+};
+
 
 const crearUsuario = async (req, res) => {
-  const { nombre, apellido_paterno, apellido_materno, email, password, fecha_nacimiento, id_rol } = req.body;
+    const { nombre, apellido_paterno, apellido_materno, email, password, fecha_nacimiento, id_rol } = req.body;
+    try {
+        const existe = await Usuario.findOne({ where: { email } });
+        if (existe) {
+            return res.status(400).json({ ok: false, msg: 'El email ya está registrado' });
+        }
 
-  try {
-    const existe = await Usuario.findOne({ where: { email } });
-    if (existe) {
-      return res.status(400).json({ ok: false, msg: 'El email ya está registrado' });
+        if (id_rol) {
+            const rolExiste = await Rol.findByPk(id_rol);
+            if (!rolExiste) {
+                return res.status(400).json({ ok: false, msg: 'El rol especificado no existe' });
+            }
+        }
+
+        let passwordPlana;
+        if (password && password.trim() !== '') {
+            try {
+                await passwordFuerte(password);
+            } catch (err) {
+                return res.status(400).json({ ok: false, msg: err.message });
+            }
+            passwordPlana = password;
+        } else {
+            passwordPlana = crypto.randomBytes(16).toString('hex') + 'Aa1!';
+        }
+
+        const salt = bcrypt.genSaltSync();
+        const passwordHasheada = bcrypt.hashSync(passwordPlana, salt);
+        const config = await ConfiguracionSeguridad.findOne({ where: { activo: true } });
+        if (!config) {
+            return res.status(500).json({ ok: false, msg: 'No hay configuración de seguridad registrada' });
+        }
+        const fecha_expiracion = new Date();
+        fecha_expiracion.setDate(fecha_expiracion.getDate() + config.vida_util_password_dias);
+
+        const usuario = await Usuario.create({
+            nombre,
+            apellido_paterno,
+            apellido_materno,
+            email,
+            password: passwordHasheada,
+            fecha_nacimiento,
+            id_rol: id_rol || null,
+            fecha_ultimo_cambio_password: new Date(),
+            fecha_expiracion_password: fecha_expiracion
+        });
+
+        await guardarEnHistorial(usuario.id_usuario, passwordHasheada);
+        const usuarioConRol = await Usuario.findByPk(usuario.id_usuario, {
+            include: [{ model: Rol, as: 'rol', attributes: ['id_rol', 'nombre'] }]
+        });
+
+        const token = await generarJWT(usuario.id_usuario, usuario.email);
+        res.status(201).json({
+            ok: true,
+            usuario: {
+                id_usuario: usuarioConRol.id_usuario,
+                nombre: usuarioConRol.nombre,
+                apellido_paterno: usuarioConRol.apellido_paterno,
+                apellido_materno: usuarioConRol.apellido_materno,
+                email: usuarioConRol.email,
+                fecha_nacimiento: usuarioConRol.fecha_nacimiento,
+                activo: usuarioConRol.activo,
+                rol: usuarioConRol.rol
+            },
+            token
+        });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ ok: false, msg: 'Hable con el administrador' });
     }
-
-    if (id_rol) {
-      const rolExiste = await Rol.findByPk(id_rol);
-      if (!rolExiste) {
-        return res.status(400).json({ ok: false, msg: 'El rol especificado no existe' });
-      }
-    }
-
-    // Manejar contraseña opcional: permitir vacío o ausente
-    const crypto = require('crypto');
-    let passwordHasheada;
-
-    if (password && password.trim() !== '') {
-      const salt = bcrypt.genSaltSync();
-      passwordHasheada = bcrypt.hashSync(password, salt);
-    } else {
-      // Generar una contraseña temporal aleatoria para cumplir el campo NOT NULL
-      const tempPassword = crypto.randomBytes(16).toString('hex') + 'Aa1!';
-      const salt = bcrypt.genSaltSync();
-      passwordHasheada = bcrypt.hashSync(tempPassword, salt);
-    }
-
-    const usuario = await Usuario.create({
-      nombre,
-      apellido_paterno,
-      apellido_materno,
-      email,
-      password: passwordHasheada,
-      fecha_nacimiento,
-      id_rol: id_rol || null
-    });
-
-    // Usuario con el rol
-    const usuarioConRol = await Usuario.findByPk(usuario.id_usuario, {
-      include: [{
-        model: Rol,
-        as: 'rol',
-        attributes: ['id_rol', 'nombre']
-      }]
-    });
-
-    const token = await generarJWT(usuario.id_usuario, usuario.email);
-
-    res.status(201).json({
-      ok: true,
-      usuario: {
-        id_usuario: usuario.id_usuario,
-        nombre: usuario.nombre,
-        apellido_paterno: usuario.apellido_paterno,
-        apellido_materno: usuario.apellido_materno,
-        email: usuario.email,
-        fecha_nacimiento: usuario.fecha_nacimiento,
-        activo: usuario.activo,
-        rol: usuarioConRol.rol
-      },
-      token,
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ ok: false, msg: 'Hable con el administrador' });
-  }
 };
+
 
 
 // const loginUsuario = async (req, res) => {
@@ -247,20 +255,39 @@ const loginUsuario = async (req, res) => {
   const { email, password } = req.body;
 
   try {
-    const usuario = await Usuario.findOne({ where: { email, activo: true } });
+    const usuario = await Usuario.findOne({
+      where: { email, activo: true },
+      include: [{
+        model: Rol,
+        as: 'rol',
+        attributes: ['id_rol', 'nombre']
+      }]
+    });
+
     if (!usuario) {
       return res.status(400).json({ ok: false, msg: 'Usuario no existe' });
     }
 
-    if (!usuario.activo) {
-      return res.status(400).json({ ok: false, msg: 'El usuario está inactivo' });
+    //Verificar si esta bloqueado
+    const bloqueo = await verificarBloqueo(usuario);
+    if (bloqueo.bloqueado) {
+      return res.status(403).json({ ok: false, msg: bloqueo.msg });
     }
 
+    //Verificar el password
     const valid = bcrypt.compareSync(password, usuario.password);
     if (!valid) {
-      return res.status(400).json({ ok: false, msg: 'Contraseña incorrecta' });
+      const intento = await registrarIntentoFallido(usuario);
+      return res.status(400).json({ ok: false, msg: intento.msg });
     }
 
+    //Verificar expiracion del password
+    const expiracion = verificarExpiracion(usuario);
+    if (expiracion.expirada) {
+      return res.status(403).json({ ok: false, msg: expiracion.msg, passwordExpirada: true });
+    }
+
+    await resetearIntentos(usuario);
     const token = await generarJWT(usuario.id_usuario, usuario.email);
 
     res.json({
@@ -277,76 +304,45 @@ const loginUsuario = async (req, res) => {
     res.status(500).json({ ok: false, msg: 'Hable con el administrador' });
   }
 };
-
-
-// Obtener un usuario por ID
-const getUsuario = async (req, res) => {
-    const { id } = req.params;
-    try {
-      const usuario = await Usuario.findOne({
-        where: { id_usuario: id, activo: true }
-      });
-      if (!usuario) {
-        return res.status(404).json({ ok: false, msg: 'Usuario no encontrado' });
-      }
-      res.json({ ok: true, usuario });
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ ok: false, msg: 'Error al obtener usuario' });
-    }
-  };
   
-  const revalidarToken = async (req, res) => {
-    const { uid, email } = req; // Accede directamente desde req
-
+const revalidarToken = async (req, res) => {
+    const { uid, email } = req;
     if (!uid || !email) {
-        return res.status(400).json({
-            ok: false,
-            msg: 'Faltan datos del usuario'
-        });
+        return res.status(400).json({ ok: false, msg: 'Faltan datos del usuario' });
     }
 
     try {
         const token = await generarJWT(uid, email);
         res.json({ ok: true, uid, email, token });
     } catch (error) {
-        console.log(error);
-        res.status(500).json({
-            ok: false,
-            msg: 'Error al generar el token'
-        });
+        console.error(error);
+        res.status(500).json({ ok: false, msg: 'Error al generar el token' });
     }
 };
+
 
 //Funcion para editar al usuario
 const actualizarUsuario = async (req, res = response) => {
     const { id } = req.params;
     const { nombre, apellido_paterno, apellido_materno, email, password, fecha_nacimiento, id_rol } = req.body;
-
     try {
-        const usuario = await Usuario.findOne({
-            where: { id_usuario: id, activo: true }
-        });
-
+        const usuario = await Usuario.findOne({ where: { id_usuario: id, activo: true } });
         if (!usuario) {
-            return res.status(404).json({
-                ok: false,
-                msg: 'Usuario no encontrado'
-            });
+            return res.status(404).json({ ok: false, msg: 'Usuario no encontrado' });
         }
+
         if (email && email !== usuario.email) {
-          const yaExiste = await Usuario.findOne({ where: { email } });
-          if (yaExiste) return res.status(400).json({ ok:false, msg:'El email ya está en uso' });
+            const yaExiste = await Usuario.findOne({ where: { email } });
+            if (yaExiste) return res.status(400).json({ ok: false, msg: 'El email ya está en uso' });
         }
-        
-        //Valida rol
+
         if (id_rol !== undefined && id_rol !== null) {
             const rolExiste = await Rol.findByPk(id_rol);
             if (!rolExiste) {
                 return res.status(400).json({ ok: false, msg: 'El rol especificado no existe' });
             }
         }
-        
+
         const updates = {};
         if (nombre !== undefined) updates.nombre = nombre;
         if (apellido_paterno !== undefined) updates.apellido_paterno = apellido_paterno;
@@ -356,56 +352,63 @@ const actualizarUsuario = async (req, res = response) => {
         if (id_rol !== undefined) updates.id_rol = id_rol;
 
         if (password) {
-          const salt = bcrypt.genSaltSync();
-          updates.password = bcrypt.hashSync(password, salt);
+            try {
+                await passwordFuerte(password);
+            } catch (err) {
+                return res.status(400).json({ ok: false, msg: err.message });
+            }
+
+            // Verifica historial para que no se repita
+            const historial = await verificarHistorial(usuario.id_usuario, password);
+            if (!historial.ok) {
+                return res.status(400).json({ ok: false, msg: historial.msg });
+            }
+            const salt = bcrypt.genSaltSync();
+            const passwordHasheada = bcrypt.hashSync(password, salt);
+
+            const config = await ConfiguracionSeguridad.findOne({ where: { activo: true } });
+            if (!config) {
+                return res.status(500).json({ ok: false, msg: 'No hay configuración de seguridad registrada' });
+            }
+            const fecha_expiracion = new Date();
+            fecha_expiracion.setDate(fecha_expiracion.getDate() + config.vida_util_password_dias);
+
+            updates.password = passwordHasheada;
+            updates.fecha_ultimo_cambio_password = new Date();
+            updates.fecha_expiracion_password = fecha_expiracion;
+
+            await guardarEnHistorial(usuario.id_usuario, passwordHasheada);
         }
 
         await usuario.update(updates);
-
         const usuarioActualizado = await Usuario.findByPk(id, {
-            include: [{
-                model: Rol,
-                as: 'rol',
-                attributes: ['id_rol', 'nombre']
-            }]
+            include: [{ model: Rol, as: 'rol', attributes: ['id_rol', 'nombre'] }]
         });
 
-      const { password: _, ...usuarioPlano } = usuarioActualizado.get({ plain:true });
-      res.json({ ok:true, usuario: usuarioPlano });
+        const { password: _, ...usuarioPlano } = usuarioActualizado.get({ plain: true });
+        res.json({ ok: true, usuario: usuarioPlano });
+
     } catch (e) {
-      console.error('Error al actualizar el usuario:', e);
-      res.status(500).json({ ok:false, msg:'Error al actualizar el usuario' });
+        console.error('Error al actualizar el usuario:', e);
+        res.status(500).json({ ok: false, msg: 'Error al actualizar el usuario' });
     }
 };
+
 
 // Eliminado lógico de un usuario
 const eliminarUsuario = async (req, res = response) => {
     const { id } = req.params;
-
     try {
-        const usuario = await Usuario.findOne({
-            where: { id_usuario: id, activo: true }
-        });
-
+        const usuario = await Usuario.findOne({ where: { id_usuario: id, activo: true } });
         if (!usuario) {
-            return res.status(404).json({
-                ok: false,
-                msg: 'Usuario no encontrado'
-            });
+            return res.status(404).json({ ok: false, msg: 'Usuario no encontrado' });
         }
-        
-        await usuario.update({ activo: false });
 
-        res.json({
-            ok: true,
-            msg: 'Usuario eliminado correctamente'
-        });
+        await usuario.update({ activo: false });
+        res.json({ ok: true, msg: 'Usuario eliminado correctamente' });
     } catch (error) {
         console.error('Error al eliminar el usuario:', error);
-        res.status(500).json({
-            ok: false,
-            msg: 'Error al eliminar el usuario'
-        });
+        res.status(500).json({ ok: false, msg: 'Error al eliminar el usuario' });
     }
 };
 

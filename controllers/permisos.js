@@ -7,7 +7,7 @@ const getPermisos = async (req, res) => {
     try {
         const permisos = await Permiso.findAll({
             where: { activo: true },
-            order: [['nombre', 'ASC']]
+            order: [['id_permiso', 'ASC']]
         });
         res.json({ ok: true, permisos });
     } catch (error) {

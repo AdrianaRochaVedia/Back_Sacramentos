@@ -1,5 +1,6 @@
 const { Op } = require('sequelize');
 const Rol = require('../models/Rol');
+const Usuario = require('../models/Usuario');
 const Permiso = require('../models/Permisos');
 const RolPermiso = require('../models/RolPermiso');
 
@@ -14,7 +15,7 @@ const getRoles = async (req, res) => {
                 attributes: ['id_permiso', 'nombre'],
                 through: { attributes: ['fecha_registro'] }
             }],
-            order: [['nombre', 'ASC']]
+            order: [['id_rol', 'ASC']]
         });
 
         res.json({ ok: true, roles });
@@ -77,7 +78,7 @@ const verificarPermisosRepetidos = async (permisosIds, excludeRolId = null) => {
 };
 
 const crearRol = async (req, res) => {
-    const { nombre, permisos = [] } = req.body;
+    const { nombre, descripcion, permisos = [] } = req.body;
     try {
         const nombreExiste = await Rol.findOne({ where: { nombre, activo: true } });
         if (nombreExiste) {
@@ -94,7 +95,7 @@ const crearRol = async (req, res) => {
             }
         }
 
-        const rol = await Rol.create({ nombre });
+        const rol = await Rol.create({ nombre, descripcion });
         if (permisos.length > 0) {
             const rolPermisos = permisos.map(id_permiso => ({
                 id_rol: rol.id_rol,
@@ -123,7 +124,7 @@ const crearRol = async (req, res) => {
 //Actualizar rol
 const actualizarRol = async (req, res) => {
     const { id } = req.params;
-    const { nombre, permisos } = req.body;
+    const { nombre, descripcion, permisos } = req.body;
     
     try {
         const rol = await Rol.findOne({ where: { id_rol: id, activo: true } });
@@ -151,6 +152,7 @@ const actualizarRol = async (req, res) => {
         }
 
         if (nombre) await rol.update({ nombre });
+        if (descripcion) await rol.update({ descripcion });
         if (permisos !== undefined) {
             await RolPermiso.destroy({ where: { id_rol: id } });
 
