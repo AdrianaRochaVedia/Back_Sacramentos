@@ -54,7 +54,7 @@ const ConfiguracionSeguridad = sequelize.define('ConfiguracionSeguridad', {
     allowNull: false,
     defaultValue: 5
   },
-  vida_util_password:{
+  vida_util_password_dia:{
     type: DataTypes.INTEGER,
     allowNull: false,
     defaultValue: 90

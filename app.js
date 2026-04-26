@@ -162,6 +162,8 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/password', passwordRoutes);
 app.use('/api/rol', require('./routes/rolRoute'));
 app.use('/api/permiso', require('./routes/permisoRoute'));
+app.use('/api/configuracion-seguridad', require('./routes/configuracionSeguridadRoute'));
+
 
 app.get('/api/proxy-pdf', async (req, res) => {
   try {
