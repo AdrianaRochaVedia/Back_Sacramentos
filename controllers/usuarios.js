@@ -1,6 +1,7 @@
 const { response } = require('express');
 const bcrypt = require('bcryptjs');
 const Usuario = require('../models/Usuario');
+const Rol = require('../models/Rol');
 const { generarJWT } = require('../helpers/jwt');
 const decode = require('jsonwebtoken/decode');
 const { combinarCondiciones } = require('../middlewares/busqueda');
@@ -21,8 +22,8 @@ const getUsuarios = async (req, res) => {
             apellido_materno,
             email,
             fecha_nacimiento,
-            rol,
-            activo
+            activo,
+            rol
         } = req.query;
   
 
@@ -32,7 +33,7 @@ const getUsuarios = async (req, res) => {
             'apellido_materno',
             'email',
             'fecha_nacimiento',
-            'rol'
+            //'rol'
         ];
         
 
@@ -42,14 +43,25 @@ const getUsuarios = async (req, res) => {
             apellido_materno,
             email,
             fecha_nacimiento,
-            rol,
+            //rol,
             activo: activo !== undefined ? activo : true
         };
         
         const whereConditions = combinarCondiciones(search, camposBusqueda, filtros);
 
+        const whereRol = rol ? { nombre: rol } : {};
+
         const { count, rows } = await Usuario.findAndCountAll({
             where: whereConditions,
+            include: [
+                {
+                    model: Rol,
+                    as: 'rol',
+                    attributes: ['id_rol', 'nombre'],
+                    where: whereRol,
+                    required: !!rol  
+                }
+            ],
             offset,
             limit,
             order: [['apellido_paterno', 'ASC'], ['apellido_materno', 'ASC'], ['nombre', 'ASC'], ['rol', 'ASC'], ['email', 'ASC']]
@@ -111,12 +123,19 @@ const getAllUsuarios = async (req, res) => {
 
 
 const crearUsuario = async (req, res) => {
-  const { nombre, apellido_paterno, apellido_materno, email, password, fecha_nacimiento, rol } = req.body;
+  const { nombre, apellido_paterno, apellido_materno, email, password, fecha_nacimiento, id_rol } = req.body;
 
   try {
     const existe = await Usuario.findOne({ where: { email } });
     if (existe) {
       return res.status(400).json({ ok: false, msg: 'El email ya está registrado' });
+    }
+
+    if (id_rol) {
+      const rolExiste = await Rol.findByPk(id_rol);
+      if (!rolExiste) {
+        return res.status(400).json({ ok: false, msg: 'El rol especificado no existe' });
+      }
     }
 
     // Manejar contraseña opcional: permitir vacío o ausente
@@ -140,7 +159,16 @@ const crearUsuario = async (req, res) => {
       email,
       password: passwordHasheada,
       fecha_nacimiento,
-      rol,
+      id_rol: id_rol || null
+    });
+
+    // Usuario con el rol
+    const usuarioConRol = await Usuario.findByPk(usuario.id_usuario, {
+      include: [{
+        model: Rol,
+        as: 'rol',
+        attributes: ['id_rol', 'nombre']
+      }]
     });
 
     const token = await generarJWT(usuario.id_usuario, usuario.email);
@@ -155,7 +183,7 @@ const crearUsuario = async (req, res) => {
         email: usuario.email,
         fecha_nacimiento: usuario.fecha_nacimiento,
         activo: usuario.activo,
-        rol: usuario.rol,
+        rol: usuarioConRol.rol
       },
       token,
     });
@@ -293,7 +321,7 @@ const getUsuario = async (req, res) => {
 //Funcion para editar al usuario
 const actualizarUsuario = async (req, res = response) => {
     const { id } = req.params;
-    const { nombre, apellido_paterno, apellido_materno, email, password, fecha_nacimiento, rol } = req.body;
+    const { nombre, apellido_paterno, apellido_materno, email, password, fecha_nacimiento, id_rol } = req.body;
 
     try {
         const usuario = await Usuario.findOne({
@@ -311,13 +339,21 @@ const actualizarUsuario = async (req, res = response) => {
           if (yaExiste) return res.status(400).json({ ok:false, msg:'El email ya está en uso' });
         }
         
+        //Valida rol
+        if (id_rol !== undefined && id_rol !== null) {
+            const rolExiste = await Rol.findByPk(id_rol);
+            if (!rolExiste) {
+                return res.status(400).json({ ok: false, msg: 'El rol especificado no existe' });
+            }
+        }
+        
         const updates = {};
         if (nombre !== undefined) updates.nombre = nombre;
         if (apellido_paterno !== undefined) updates.apellido_paterno = apellido_paterno;
         if (apellido_materno !== undefined) updates.apellido_materno = apellido_materno;
         if (email !== undefined) updates.email = email;
         if (fecha_nacimiento !== undefined) updates.fecha_nacimiento = fecha_nacimiento;
-        if (rol !== undefined) updates.rol = rol;
+        if (id_rol !== undefined) updates.id_rol = id_rol;
 
         if (password) {
           const salt = bcrypt.genSaltSync();
@@ -326,7 +362,15 @@ const actualizarUsuario = async (req, res = response) => {
 
         await usuario.update(updates);
 
-      const { password: _, ...usuarioPlano } = usuario.get({ plain:true });
+        const usuarioActualizado = await Usuario.findByPk(id, {
+            include: [{
+                model: Rol,
+                as: 'rol',
+                attributes: ['id_rol', 'nombre']
+            }]
+        });
+
+      const { password: _, ...usuarioPlano } = usuarioActualizado.get({ plain:true });
       res.json({ ok:true, usuario: usuarioPlano });
     } catch (e) {
       console.error('Error al actualizar el usuario:', e);
