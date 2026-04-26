@@ -160,6 +160,8 @@ app.use('/api/matrimoniodetalles', require('./routes/matrimoniodetalles'));
 app.use('/api/personasacramentos', require('./routes/personasacramentos'));
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/password', passwordRoutes);
+app.use('/api/rol', require('./routes/rolRoute'));
+app.use('/api/permiso', require('./routes/permisoRoute'));
 
 app.get('/api/proxy-pdf', async (req, res) => {
   try {
