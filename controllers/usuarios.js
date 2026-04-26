@@ -166,52 +166,91 @@ const crearUsuario = async (req, res) => {
 };
 
 
+// const loginUsuario = async (req, res) => {
+//     const { email, password, turnstileToken } = req.body;
+
+//     try {
+//       const captchaResult = await verifyTurnstileToken({
+//         token: turnstileToken,
+//         remoteip: req.ip
+//       });
+
+//       if (!captchaResult.ok) {
+//         return res.status(400).json({
+//           ok: false,
+//           msg: captchaResult.msg,
+//           errors: captchaResult.errors || []
+//         });
+//       }
+
+//       const usuario = await Usuario.findOne({ where: { email, activo: true } });
+//       if (!usuario) {
+//         return res.status(400).json({ ok: false, msg: 'Usuario no existe' });
+//       }
+
+//       if (!usuario.activo) {
+//         return res.status(400).json({ ok: false, msg: 'El usuario está inactivo' });
+//       }
+
+//       const valid = bcrypt.compareSync(password, usuario.password);
+//       if (!valid) {
+//         return res.status(400).json({ ok: false, msg: 'Contraseña incorrecta' });
+//       }
+
+//       const token = await generarJWT(usuario.id_usuario, usuario.email);
+
+//       res.json({
+//         ok: true,
+//         uid: usuario.id_usuario,
+//         email: usuario.email,
+//         nombre: usuario.nombre,
+//         rol: usuario.rol,
+//         token
+//       });
+//     } catch (err) {
+//       console.error(err);
+//       res.status(500).json({ ok: false, msg: 'Hable con el administrador' });
+//     }
+// };
+
+
+//Login sin captcha
 const loginUsuario = async (req, res) => {
-    const { email, password, turnstileToken } = req.body;
+  const { email, password } = req.body;
 
-    try {
-      const captchaResult = await verifyTurnstileToken({
-        token: turnstileToken,
-        remoteip: req.ip
-      });
-
-      if (!captchaResult.ok) {
-        return res.status(400).json({
-          ok: false,
-          msg: captchaResult.msg,
-          errors: captchaResult.errors || []
-        });
-      }
-
-      const usuario = await Usuario.findOne({ where: { email, activo: true } });
-      if (!usuario) {
-        return res.status(400).json({ ok: false, msg: 'Usuario no existe' });
-      }
-
-      if (!usuario.activo) {
-        return res.status(400).json({ ok: false, msg: 'El usuario está inactivo' });
-      }
-
-      const valid = bcrypt.compareSync(password, usuario.password);
-      if (!valid) {
-        return res.status(400).json({ ok: false, msg: 'Contraseña incorrecta' });
-      }
-
-      const token = await generarJWT(usuario.id_usuario, usuario.email);
-
-      res.json({
-        ok: true,
-        uid: usuario.id_usuario,
-        email: usuario.email,
-        nombre: usuario.nombre,
-        rol: usuario.rol,
-        token
-      });
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ ok: false, msg: 'Hable con el administrador' });
+  try {
+    const usuario = await Usuario.findOne({ where: { email, activo: true } });
+    if (!usuario) {
+      return res.status(400).json({ ok: false, msg: 'Usuario no existe' });
     }
+
+    if (!usuario.activo) {
+      return res.status(400).json({ ok: false, msg: 'El usuario está inactivo' });
+    }
+
+    const valid = bcrypt.compareSync(password, usuario.password);
+    if (!valid) {
+      return res.status(400).json({ ok: false, msg: 'Contraseña incorrecta' });
+    }
+
+    const token = await generarJWT(usuario.id_usuario, usuario.email);
+
+    res.json({
+      ok: true,
+      uid: usuario.id_usuario,
+      email: usuario.email,
+      nombre: usuario.nombre,
+      rol: usuario.rol,
+      token
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false, msg: 'Hable con el administrador' });
+  }
 };
+
+
 // Obtener un usuario por ID
 const getUsuario = async (req, res) => {
     const { id } = req.params;
