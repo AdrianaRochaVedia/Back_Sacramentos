@@ -3,38 +3,27 @@ const { check } = require('express-validator');
 const { validarCampos } = require('../middlewares/validar-campos');
 const { getAllTiposSacramento, crearTipoSacramento, getTipoSacramento, getTiposSacramento, actualizarTipoSacramento } = require('../controllers/tiposacramentos');
 const { validarJWT } = require('../middlewares/validar-jwt');
+const { validarPermiso } = require('../middlewares/validarPermiso');
 
 const router = Router();
 
-router.post(
-    '/new',
-     validarJWT,
-    [
+router.get('/', validarJWT, validarPermiso('VER_SACRAMENTOS'), getTiposSacramento);
 
-        check('nombre', 'El nombre es obligatorio').not().isEmpty(),
-        check('descripcion', 'La descripción es obligatoria').not().isEmpty(),
-        validarCampos
-    ],
-    crearTipoSacramento
-);
+router.get('/all', validarJWT, validarPermiso('VER_SACRAMENTOS'), getAllTiposSacramento);
 
-router.get('/', validarJWT,getTiposSacramento);
+router.get('/:id', validarJWT, validarPermiso('VER_SACRAMENTOS'), getTipoSacramento);
 
-router.get('/all', validarJWT, getAllTiposSacramento);
+router.post('/new', validarJWT, validarPermiso('CREAR_SACRAMENTO'), [
+    check('nombre', 'El nombre es obligatorio').not().isEmpty(),
+    check('descripcion', 'La descripción es obligatoria').not().isEmpty(),
+    validarCampos
+], crearTipoSacramento);
 
-router.get('/:id', validarJWT, getTipoSacramento);
-
-router.put('/:id', validarJWT, [
+router.put('/:id', validarJWT, validarPermiso('EDITAR_SACRAMENTO'), [
     check('id', 'El ID debe ser un número válido').isInt(),
     check('nombre').optional().trim().notEmpty(),
     check('descripcion').optional().trim().notEmpty(),
     validarCampos
 ], actualizarTipoSacramento);
-
-// router.patch('/:id', validarJWT, [
-//     check('id', 'El ID debe ser un número válido').isInt(),
-//     validarCampos
-// ], eliminarTipoSacramento);
-
 
 module.exports = router;
