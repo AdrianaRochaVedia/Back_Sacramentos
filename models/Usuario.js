@@ -1,6 +1,7 @@
 // models/Usuario.js
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../database/config');
+const Rol  = require('./Rol');
 
 const Usuario = sequelize.define('Usuario', {
   id_usuario: {
@@ -39,54 +40,59 @@ const Usuario = sequelize.define('Usuario', {
     allowNull: false,
     defaultValue: true
   },
-  rol: {
-    type: DataTypes.STRING(100),
-    allowNull: false
+  
+  id_rol: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'rol',
+      key: 'id_rol'
+    },
+    onDelete: 'SET NULL'
+  },
+  //Revisar essto
+  // rol: {
+  //   type: DataTypes.STRING(100),
+  //   allowNull: false
+  // },
+
+  intentos_fallidos: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 0
+  },
+  bloqueado: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false
+  },
+  fecha_bloqueo: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+  fecha_ultimo_cambio_password: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+  fecha_expiracion_password: {
+    type: DataTypes.DATE,
+    allowNull: true
   }
+
 }, {
   tableName: 'usuario',
   timestamps: false
 });
 
+Usuario.belongsTo(Rol, {
+  foreignKey: 'id_rol',
+  as: 'rol'
+});
+
+Rol.hasMany(Usuario, {
+  foreignKey: 'id_rol',
+  as: 'usuarios'
+});
+
 module.exports = Usuario;
 
-/**
- * @swagger
- * components:
- *   schemas:
- *     Usuario:
- *       type: object
- *       properties:
- *         id_usuario:
- *           type: integer
- *           description: ID único del usuario
- *           example: 1
- *         nombre:
- *           type: string
- *           description: Nombre del usuario
- *           example: "Juan Pérez"
- *         tipo:
- *           type: string
- *           description: Tipo de usuario
- *           example: "Administrador"
- *         correo:
- *           type: string
- *           description: Correo electrónico del usuario
- *           example: "juan.perez@example.com"
- *         contrasenia:
- *           type: string
- *           description: Contraseña del usuario (almacenada de forma segura)
- *           example: "hashed_password"
- *         isDeleted:
- *           type: boolean
- *           description: Indica si el usuario está eliminado lógicamente
- *           example: false
- *       required:
- *         - id_usuario
- *         - nombre
- *         - tipo
- *         - correo
- *         - contrasenia
- *         - isDeleted
- *       description: Representa un usuario en el sistema
- */

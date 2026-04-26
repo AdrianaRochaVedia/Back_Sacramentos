@@ -10,19 +10,23 @@ const {
     validarBautizoPersona
 } = require('../controllers/personasacramento');
 const { validarJWT } = require('../middlewares/validar-jwt');
+const { validarPermiso } = require('../middlewares/validarPermiso');
 
 const router = Router();
 
 router.use(validarJWT);
 
-router.get('/', getPersonaSacramentos);
+router.get('/', validarJWT,validarPermiso('VER_SACRAMENTOS'),getPersonaSacramentos);
 
-router.get('/sacramento/:sacramentoId', getPersonasPorSacramento);
+router.get('/sacramento/:sacramentoId', validarJWT, validarPermiso('VER_SACRAMENTOS'), getPersonasPorSacramento);
 
-router.get('/persona/:personaId', getSacramentosPorPersona);
+router.get('/persona/:personaId', validarJWT, validarPermiso('VER_SACRAMENTOS'), getSacramentosPorPersona);
 
 
-router.post('/new', [
+router.post('/new', 
+    validarJWT,
+    validarPermiso('CREAR_SACRAMENTO'),
+    [
     check('persona_id_persona', 'El ID de persona es obligatorio').not().isEmpty(),
     check('persona_id_persona', 'El ID de persona debe ser un número').isNumeric(),
     check('rol_sacramento_id_rol_sacra', 'El ID de rol sacramento es obligatorio').not().isEmpty(),
@@ -33,6 +37,6 @@ router.post('/new', [
 ], crearPersonaSacramento);
 
 //ruta para validar bautizo
-router.get('/validar-bautizo/:personaId', validarBautizoPersona);
+router.get('/validar-bautizo/:personaId', validarJWT, validarPermiso('VER_SACRAMENTOS'), validarBautizoPersona);
 
 module.exports = router;             
