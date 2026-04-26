@@ -3,12 +3,13 @@ const { check } = require('express-validator');
 const { validarCampos } = require('../middlewares/validar-campos');
 const { getConfiguracion, actualizarConfiguracion } = require('../controllers/configuracionSeguridad');
 const { validarJWT } = require('../middlewares/validar-jwt');
+const { validarPermiso } = require('../middlewares/validarPermiso');
 
 const router = Router();
 
-router.get('/', validarJWT, getConfiguracion);
+router.get('/', validarJWT, validarPermiso('VER_CONFIG_SEGURIDAD'), getConfiguracion);
 
-router.put('/', validarJWT, [
+router.put('/', validarJWT, validarPermiso('EDITAR_CONFIG_SEGURIDAD'),[
     check('longitud_minima').optional().isInt({ min: 1 }).withMessage('Debe ser un número entero positivo'),
     check('longitud_maxima').optional().isInt({ min: 1 }).withMessage('Debe ser un número entero positivo'),
     check('max_intentos_fallidos').optional().isInt({ min: 1 }).withMessage('Debe ser un número entero positivo'),

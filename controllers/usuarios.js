@@ -11,6 +11,7 @@ const { passwordFuerte } = require('../helpers/validar-password');
 const { verificarBloqueo, registrarIntentoFallido, resetearIntentos } = require('../helpers/seguridad/manejarIntentos');
 const { verificarHistorial, guardarEnHistorial } = require('../helpers/seguridad/manejarHistorial');
 const verificarExpiracion = require('../helpers/seguridad/verificarExpiracion');
+const { verifyTurnstileToken } = require('../helpers/turnstile');
 
 // Obtener todos los usuarios activos
 const getUsuarios = async (req, res) => {
