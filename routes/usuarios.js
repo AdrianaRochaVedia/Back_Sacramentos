@@ -9,6 +9,7 @@ const router = Router();
 
 router.post(
     '/new',
+    validarJWT,
     [
         check('nombre', 'El nombre es obligatorio').not().isEmpty(),
         check('apellido_paterno', 'El apellido paterno es obligatorio').not().isEmpty(),
@@ -38,7 +39,7 @@ router.post(
 router.get('/renew', validarJWT, revalidarToken);
 
 
-router.get('/', getUsuarios);
+router.get('/', validarJWT,  getUsuarios);
 
 router.get('/all', validarJWT, getAllUsuarios);
 
