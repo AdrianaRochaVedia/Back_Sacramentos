@@ -1,7 +1,6 @@
 // models/HistoricoPassword.js
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../database/config');
-const Usuario = require('./Usuario');
 
 const ConfiguracionSeguridad = sequelize.define('ConfiguracionSeguridad', {
   id_config: {
@@ -91,4 +90,4 @@ const ConfiguracionSeguridad = sequelize.define('ConfiguracionSeguridad', {
   timestamps: false
 });
 
-module.exports = HistoricoPassword;
+module.exports = ConfiguracionSeguridad;
