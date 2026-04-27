@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const Usuario = require('../models/Usuario');
 const Rol = require('../models/Rol');
 const ConfiguracionSeguridad = require('../models/ConfiguracionSeguridad');
+const DominioPermitido = require('../models/dominioPermitido');
 const { generarJWT } = require('../helpers/jwt');
 const { combinarCondiciones } = require('../middlewares/busqueda');
 const { verifyTurnstileToken } = require('../helpers/turnstile');
@@ -12,6 +13,19 @@ const { verificarBloqueo, registrarIntentoFallido, resetearIntentos } = require(
 const { verificarHistorial, guardarEnHistorial } = require('../helpers/seguridad/manejarHistorial');
 const verificarExpiracion = require('../helpers/seguridad/verificarExpiracion');
 
+const validarDominioCorreo = async (email) => {
+  if (!email || !email.includes('@')) return false;
+
+  const dominioEmail = email.split('@')[1].toLowerCase();
+
+  const dominiosPermitidos = await DominioPermitido.findAll({
+    where: { activo: true },
+  });
+
+  return dominiosPermitidos.some((d) =>
+    dominioEmail === d.dominio || dominioEmail.endsWith(`.${d.dominio}`)
+  );
+};
 
 // Obtener todos los usuarios activos
 // Obtener todos los usuarios activos
@@ -171,6 +185,15 @@ const crearUsuario = async (req, res) => {
         const existe = await Usuario.findOne({ where: { email } });
         if (existe) {
             return res.status(400).json({ ok: false, msg: 'El email ya está registrado' });
+        }
+
+        const dominioValido = await validarDominioCorreo(email);
+
+        if (!dominioValido) {
+          return res.status(400).json({
+            ok: false,
+            msg: 'El dominio del correo no está permitido'
+          });
         }
 
         if (id_rol) {
