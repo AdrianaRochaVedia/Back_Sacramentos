@@ -123,63 +123,107 @@ const crearRol = async (req, res) => {
 
 //Actualizar rol
 const actualizarRol = async (req, res) => {
-    const { id } = req.params;
-    const { nombre, descripcion, permisos } = req.body;
-    
-    try {
-        const rol = await Rol.findOne({ where: { id_rol: id, activo: true } });
-        if (!rol) {
-            return res.status(404).json({ ok: false, msg: 'Rol no encontrado' });
-        }
+  const { id } = req.params;
+  const { nombre, descripcion, permisos, activo } = req.body;
 
-        if (nombre && nombre !== rol.nombre) {
-            const nombreExiste = await Rol.findOne({
-                where: { nombre, activo: true, id_rol: { [Op.ne]: id } }
-            });
-            if (nombreExiste) {
-                return res.status(400).json({ ok: false, msg: `Ya existe un rol con el nombre "${nombre}"` });
-            }
-        }
+  try {
+    const rol = await Rol.findOne({ where: { id_rol: id } });
 
-        if (permisos && permisos.length > 0) {
-            const rolDuplicado = await verificarPermisosRepetidos(permisos, id);
-            if (rolDuplicado) {
-                return res.status(400).json({
-                    ok: false,
-                    msg: `Ya existe el rol "${rolDuplicado.nombre}" con exactamente los mismos permisos`
-                });
-            }
-        }
-
-        if (nombre) await rol.update({ nombre });
-        if (descripcion) await rol.update({ descripcion });
-        if (permisos !== undefined) {
-            await RolPermiso.destroy({ where: { id_rol: id } });
-
-            if (permisos.length > 0) {
-                const rolPermisos = permisos.map(id_permiso => ({
-                    id_rol: parseInt(id),
-                    id_permiso
-                }));
-                await RolPermiso.bulkCreate(rolPermisos);
-            }
-        }
-
-        const rolActualizado = await Rol.findByPk(id, {
-            include: [{
-                model: Permiso,
-                as: 'permisos',
-                attributes: ['id_permiso', 'nombre'],
-                through: { attributes: ['fecha_registro'] }
-            }]
-        });
-
-        res.json({ ok: true, rol: rolActualizado });
-
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ ok: false, msg: 'Error al actualizar el rol' });
+    if (!rol) {
+      return res.status(404).json({ ok: false, msg: 'Rol no encontrado' });
     }
+
+    if (nombre && nombre !== rol.nombre) {
+      const nombreExiste = await Rol.findOne({
+        where: {
+          nombre,
+          activo: true,
+          id_rol: { [Op.ne]: id }
+        }
+      });
+
+      if (nombreExiste) {
+        return res.status(400).json({
+          ok: false,
+          msg: `Ya existe un rol con el nombre "${nombre}"`
+        });
+      }
+    }
+
+    if (activo === false || activo === 'false') {
+      const usuariosConRol = await Usuario.count({
+        where: {
+          id_rol: id,
+          activo: true
+        }
+      });
+
+      if (usuariosConRol > 0) {
+        return res.status(400).json({
+          ok: false,
+          msg: `No se puede desactivar el rol, hay ${usuariosConRol} usuario(s) activo(s) asignado(s) a este rol`
+        });
+      }
+    }
+
+    if (permisos && permisos.length > 0) {
+      const rolDuplicado = await verificarPermisosRepetidos(permisos, id);
+
+      if (rolDuplicado) {
+        return res.status(400).json({
+          ok: false,
+          msg: `Ya existe el rol "${rolDuplicado.nombre}" con exactamente los mismos permisos`
+        });
+      }
+    }
+
+    const updates = {};
+
+    if (nombre !== undefined) updates.nombre = nombre;
+    if (descripcion !== undefined) updates.descripcion = descripcion;
+    if (activo !== undefined) {
+      updates.activo = activo === true || activo === 'true';
+    }
+
+    await rol.update(updates);
+
+    if (permisos !== undefined) {
+      await RolPermiso.destroy({ where: { id_rol: id } });
+
+      if (permisos.length > 0) {
+        const rolPermisos = permisos.map((id_permiso) => ({
+          id_rol: parseInt(id),
+          id_permiso
+        }));
+
+        await RolPermiso.bulkCreate(rolPermisos);
+      }
+    }
+
+    const rolActualizado = await Rol.findByPk(id, {
+      include: [
+        {
+          model: Permiso,
+          as: 'permisos',
+          attributes: ['id_permiso', 'nombre'],
+          through: { attributes: ['fecha_registro'] }
+        }
+      ]
+    });
+
+    return res.json({
+      ok: true,
+      msg: 'Rol actualizado correctamente',
+      rol: rolActualizado
+    });
+
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      ok: false,
+      msg: 'Error al actualizar el rol'
+    });
+  }
 };
 
 //Eliminacion lógica del rol
