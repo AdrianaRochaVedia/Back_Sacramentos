@@ -13,10 +13,10 @@ const {
 
 const router = Router();
 
-router.get('/', validarJWT, validarPermiso('VER_PARROQUIA'), getAsignaciones);
-router.get('/:id', validarJWT, validarPermiso('VER_PARROQUIA'), getAsignacionById);
+router.get('/', validarJWT, validarPermiso('VER_PARROQUIAS'), getAsignaciones);
+router.get('/:id', validarJWT, validarPermiso('VER_PARROQUIAS'), getAsignacionById);
 router.post('/new', validarJWT, validarPermiso('CREAR_PARROQUIA'), validarCampos, crearAsignacion);
-router.put('/:id', validarJWT, validarPermiso('ACTUALIZAR_PARROQUIA'), validarCampos, actualizarAsignacion);
+router.put('/:id', validarJWT, validarPermiso('EDITAR_PARROQUIA'), validarCampos, actualizarAsignacion);
 router.delete('/:id', validarJWT, validarPermiso('ELIMINAR_PARROQUIA'), desactivarAsignacion);
 
 module.exports = router;

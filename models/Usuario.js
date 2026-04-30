@@ -2,6 +2,7 @@
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../database/config');
 const Rol  = require('./Rol');
+const Parroquia = require('./Parroquia');
 
 const Usuario = sequelize.define('Usuario', {
   id_usuario: {
@@ -84,29 +85,6 @@ const Usuario = sequelize.define('Usuario', {
   timestamps: false
 });
 
-Usuario.belongsTo(Rol, {
-  foreignKey: 'id_rol',
-  as: 'rol'
-});
-
-Rol.hasMany(Usuario, {
-  foreignKey: 'id_rol',
-  as: 'usuarios'
-});
-
-Usuario.associate = (models) => {
-  Usuario.belongsTo(models.Rol, {
-    foreignKey: 'id_rol',
-    as: 'rol'
-  });
-
-  Usuario.belongsToMany(models.Parroquia, {
-    through: models.UsuarioParroquia,
-    foreignKey: 'id_usuario',
-    otherKey: 'id_parroquia',
-    as: 'parroquias'
-  });
-};
 
 module.exports = Usuario;
 

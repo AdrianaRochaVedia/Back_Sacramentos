@@ -1,5 +1,7 @@
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../database/config');
+const Usuario = require('./Usuario');
+const Parroquia = require('./Parroquia');
 
 const UsuarioParroquia = sequelize.define('UsuarioParroquia', {
   id_usuario_parroquia: {
@@ -37,5 +39,17 @@ const UsuarioParroquia = sequelize.define('UsuarioParroquia', {
   tableName: 'usuario_parroquia',
   timestamps: false,
 });
+
+UsuarioParroquia.associate = (models) => {
+  UsuarioParroquia.belongsTo(models.Usuario, {
+    foreignKey: 'id_usuario',
+    as: 'usuario',
+  });
+
+  UsuarioParroquia.belongsTo(models.Parroquia, {
+    foreignKey: 'id_parroquia',
+    as: 'parroquia',
+  });
+};
 
 module.exports = UsuarioParroquia;
