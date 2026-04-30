@@ -11,7 +11,7 @@ router.get('/', validarJWT, validarPermiso('VER_ROLES'), getPermisos);
 
 router.get('/:id', validarJWT, validarPermiso('VER_ROLES'), getPermisoById);
 
-router.post('/new', validarJWT, validarPermiso('ASIGNAR_PERMISOS'), [
+router.post('/new', validarJWT, validarPermiso('CREAR_PERMISO'), [
     check('nombre', 'El nombre es obligatorio').not().isEmpty(),
     check('descripcion').optional().trim(),
     validarCampos

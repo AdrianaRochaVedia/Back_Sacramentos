@@ -6,6 +6,6 @@ const { validarPermiso } = require('../middlewares/validarPermiso');
 const router = Router();
 
 // Endpoint compacto con todo lo que pide el front
-router.get('/summary', validarJWT, validarPermiso('VER_AUDITORIA'), getDashboardSummary);
+router.get('/summary', validarJWT, validarPermiso('VER_DASHBOARD'), getDashboardSummary);
 
 module.exports = router;

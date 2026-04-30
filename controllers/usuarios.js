@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const Usuario = require('../models/Usuario');
 const Rol = require('../models/Rol');
 const ConfiguracionSeguridad = require('../models/ConfiguracionSeguridad');
+const DominioPermitido = require('../models/dominioPermitido');
 const { generarJWT } = require('../helpers/jwt');
 const { combinarCondiciones } = require('../middlewares/busqueda');
 const { verifyTurnstileToken } = require('../helpers/turnstile');
@@ -11,102 +12,154 @@ const { passwordFuerte } = require('../helpers/validar-password');
 const { verificarBloqueo, registrarIntentoFallido, resetearIntentos } = require('../helpers/seguridad/manejarIntentos');
 const { verificarHistorial, guardarEnHistorial } = require('../helpers/seguridad/manejarHistorial');
 const verificarExpiracion = require('../helpers/seguridad/verificarExpiracion');
-const { verifyTurnstileToken } = require('../helpers/turnstile');
+
+const validarDominioCorreo = async (email) => {
+  if (!email || !email.includes('@')) return false;
+
+  const dominioEmail = email.split('@')[1].toLowerCase();
+
+  const dominiosPermitidos = await DominioPermitido.findAll({
+    where: { activo: true },
+  });
+
+  return dominiosPermitidos.some((d) =>
+    dominioEmail === d.dominio || dominioEmail.endsWith(`.${d.dominio}`)
+  );
+};
 
 // Obtener todos los usuarios activos
+// Obtener todos los usuarios activos
 const getUsuarios = async (req, res) => {
-    try {
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 10;
-        const offset = (page - 1) * limit;
-        
-        const { 
-          search, 
-          nombre, 
-          apellido_paterno, 
-          apellido_materno, 
-          email, 
-          fecha_nacimiento, 
-          activo, 
-          rol 
-        } = req.query;
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
 
-        const camposBusqueda = [
-          'nombre', 
-          'apellido_paterno', 
-          'apellido_materno', 
-          'email', 
-          'fecha_nacimiento'
-        ];
+    const {
+      search,
+      nombre,
+      apellido_paterno,
+      apellido_materno,
+      email,
+      fecha_nacimiento,
+      activo,
+      rol
+    } = req.query;
 
-        const filtros = {
-            nombre,
-            apellido_paterno,
-            apellido_materno,
-            email,
-            fecha_nacimiento,
-            activo: activo !== undefined ? activo : true
-        };
-        
-        const whereConditions = combinarCondiciones(search, camposBusqueda, filtros);
-        const whereRol = rol ? { nombre: rol } : {};
+    const camposBusqueda = [
+      'nombre',
+      'apellido_paterno',
+      'apellido_materno',
+      'email',
+      'fecha_nacimiento'
+    ];
 
-        const { count, rows } = await Usuario.findAndCountAll({
-            where: whereConditions,
-            include: [{
-                model: Rol,
-                as: 'rol',
-                attributes: ['id_rol', 'nombre'],
-                where: whereRol,
-                required: !!rol
-            }],
-            offset,
-            limit,
-            order: [['apellido_paterno', 'ASC'], ['apellido_materno', 'ASC'], ['nombre', 'ASC'], ['email', 'ASC']]
-        });
+    const filtros = {
+      nombre,
+      apellido_paterno,
+      apellido_materno,
+      email,
+      fecha_nacimiento,
+      activo: activo !== undefined ? activo : true
+    };
 
-        res.json({
-            ok: true,
-            usuarios: rows,
-            totalItems: count,
-            totalPages: Math.ceil(count / limit),
-            currentPage: page,
-            filtros_aplicados: { search, nombre, apellido_paterno, apellido_materno, email, fecha_nacimiento, rol, activo }
-        });
+    const whereConditions = combinarCondiciones(search, camposBusqueda, filtros);
+    const whereRol = rol ? { nombre: rol } : {};
 
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ ok: false, msg: 'Error al obtener los usuarios' });
-    }
+    const { count, rows } = await Usuario.findAndCountAll({
+      where: whereConditions,
+      attributes: {
+        exclude: ['password', 'password_hash']
+      },
+      include: [
+        {
+          model: Rol,
+          as: 'rol',
+          attributes: ['id_rol', 'nombre', 'descripcion'],
+          where: whereRol,
+          required: !!rol
+        }
+      ],
+      offset,
+      limit,
+      order: [
+        ['apellido_paterno', 'ASC'],
+        ['apellido_materno', 'ASC'],
+        ['nombre', 'ASC'],
+        ['email', 'ASC']
+      ]
+    });
+
+    res.json({
+      ok: true,
+      usuarios: rows,
+      totalItems: count,
+      totalPages: Math.ceil(count / limit),
+      currentPage: page,
+      filtros_aplicados: {
+        search,
+        nombre,
+        apellido_paterno,
+        apellido_materno,
+        email,
+        fecha_nacimiento,
+        rol,
+        activo
+      }
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ ok: false, msg: 'Error al obtener los usuarios' });
+  }
 };
 
 // Obtener todos los usuarios (incluidos los eliminados)
+// Obtener todos los usuarios (incluidos los eliminados)
 const getAllUsuarios = async (req, res) => {
-    try {
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 10;
-        const offset = (page - 1) * limit;
-        const { count, rows } = await Usuario.findAndCountAll({
-            offset,
-            limit
-        });
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
 
-        res.json({
-            ok: true,
-            usuarios: rows,
-            totalItems: count,
-            totalPages: Math.ceil(count / limit),
-            currentPage: page
-        });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({
-            ok: false,
-            msg: 'Error al obtener todos los usuarios'
-        });
-    }
+    const { count, rows } = await Usuario.findAndCountAll({
+      attributes: {
+        exclude: ['password', 'password_hash']
+      },
+      include: [
+        {
+          model: Rol,
+          as: 'rol',
+          attributes: ['id_rol', 'nombre', 'descripcion'],
+          required: false
+        }
+      ],
+      offset,
+      limit,
+      order: [
+        ['apellido_paterno', 'ASC'],
+        ['apellido_materno', 'ASC'],
+        ['nombre', 'ASC'],
+        ['email', 'ASC']
+      ]
+    });
+
+    res.json({
+      ok: true,
+      usuarios: rows,
+      totalItems: count,
+      totalPages: Math.ceil(count / limit),
+      currentPage: page
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      ok: false,
+      msg: 'Error al obtener todos los usuarios'
+    });
+  }
 };
-
 // Obtener un usuario por ID
 const getUsuario = async (req, res) => {
     const { id } = req.params;
@@ -132,6 +185,15 @@ const crearUsuario = async (req, res) => {
         const existe = await Usuario.findOne({ where: { email } });
         if (existe) {
             return res.status(400).json({ ok: false, msg: 'El email ya está registrado' });
+        }
+
+        const dominioValido = await validarDominioCorreo(email);
+
+        if (!dominioValido) {
+          return res.status(400).json({
+            ok: false,
+            msg: 'El dominio del correo no está permitido'
+          });
         }
 
         if (id_rol) {
