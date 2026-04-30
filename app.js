@@ -11,6 +11,7 @@ const errorHandler = require('./middlewares/error-handler');
 const app = express();
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const dominioPermitidoRoute = require('./routes/dominioPermitidoRoute');
+const usuarioParroquiaRoute = require('./routes/usuarioParroquia');
 
 app.set('trust proxy', true);
 
@@ -165,8 +166,7 @@ app.use('/api/rol', require('./routes/rolRoute'));
 app.use('/api/permiso', require('./routes/permisoRoute'));
 app.use('/api/configuracion-seguridad', require('./routes/configuracionSeguridadRoute'));
 app.use('/api/dominio-permitido', dominioPermitidoRoute);
-
-
+app.use('/api/usuario-parroquia', usuarioParroquiaRoute);
 app.get('/api/proxy-pdf', async (req, res) => {
   try {
     const url = req.query.url;
