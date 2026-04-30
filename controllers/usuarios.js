@@ -445,9 +445,21 @@ const loginUsuario = async (req, res) => {
           model: Rol,
           as: 'rol',
           attributes: ['id_rol', 'nombre']
+        },
+        {
+          model: Parroquia,
+          as: 'parroquias',
+          attributes: ['id_parroquia', 'nombre'],
+          through: {
+            attributes: ['activo'],
+            where: { activo: true } // 👈 SOLO la parroquia activa
+          },
+          required: false
         }
       ]
     });
+
+    const parroquiaActiva = usuario.parroquias?.[0] || null;
 
     if (!usuario) {
       return res.status(400).json({
@@ -532,6 +544,7 @@ const loginUsuario = async (req, res) => {
       email: usuario.email,
       nombre: usuario.nombre,
       rol: usuario.rol,
+      parroquia: parroquiaActiva,
       token
     });
 
@@ -602,6 +615,7 @@ const verificarCodigo2FA = async (req, res) => {
       email: usuario.email,
       nombre: usuario.nombre,
       rol: usuario.rol,
+      parroquia: parroquiaActiva,
       token
     });
 
