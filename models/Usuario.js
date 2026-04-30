@@ -2,6 +2,7 @@
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../database/config');
 const Rol  = require('./Rol');
+const Parroquia = require('./Parroquia');
 
 const Usuario = sequelize.define('Usuario', {
   id_usuario: {
@@ -84,15 +85,6 @@ const Usuario = sequelize.define('Usuario', {
   timestamps: false
 });
 
-Usuario.belongsTo(Rol, {
-  foreignKey: 'id_rol',
-  as: 'rol'
-});
-
-Rol.hasMany(Usuario, {
-  foreignKey: 'id_rol',
-  as: 'usuarios'
-});
 
 module.exports = Usuario;
 
