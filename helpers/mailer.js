@@ -1,36 +1,37 @@
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 
-// Configuración del transportador con variables de entorno
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT || 587),
-  secure: process.env.SMTP_SECURE === 'true', // true para 465, false para 587
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS
-  }
-});
-
-// Verificación opcional al iniciar el servidor
-async function verify() {
-  try {
-    await transporter.verify();
-    console.log('Conexión SMTP verificada con éxito.');
-  } catch (e) {
-    console.warn('Advertencia SMTP:', e?.message || e);
-  }
-}
-
-// Función genérica para enviar correos
 async function sendMail({ to, subject, html, text }) {
-  const from = process.env.MAIL_FROM || process.env.SMTP_USER;
-  return transporter.sendMail({
-    from,
+  if (!process.env.RESEND_API_KEY) {
+    throw new Error('Falta RESEND_API_KEY en variables de entorno');
+  }
+
+  if (!process.env.MAIL_FROM) {
+    throw new Error('Falta MAIL_FROM en variables de entorno');
+  }
+
+  const resend = new Resend(process.env.RESEND_API_KEY);
+
+  const { data, error } = await resend.emails.send({
+    from: process.env.MAIL_FROM,
     to,
     subject,
     html,
-    text
+    text,
   });
+
+  if (error) {
+    console.error('Error Resend:', error);
+    throw new Error(error.message || 'Error enviando correo');
+  }
+
+  return data;
 }
 
-module.exports = { transporter, sendMail, verify };
+async function verify() {
+  console.log('Mailer activo con Resend API');
+}
+
+module.exports = {
+  sendMail,
+  verify,
+};
