@@ -445,6 +445,16 @@ const loginUsuario = async (req, res) => {
           model: Rol,
           as: 'rol',
           attributes: ['id_rol', 'nombre']
+        },
+        {
+          model: Parroquia,
+          as: 'parroquias',
+          attributes: ['id_parroquia', 'nombre'],
+          through: {
+            attributes: [],
+            where: { activo: true }
+          },
+          required: false
         }
       ]
     });
@@ -455,6 +465,8 @@ const loginUsuario = async (req, res) => {
         msg: 'Usuario no existe'
       });
     }
+
+    const parroquiaActiva = usuario.parroquias?.[0] || null;
 
     const bloqueo = await verificarBloqueo(usuario);
     if (bloqueo.bloqueado) {
@@ -532,6 +544,12 @@ const loginUsuario = async (req, res) => {
       email: usuario.email,
       nombre: usuario.nombre,
       rol: usuario.rol,
+      parroquia: parroquiaActiva
+        ? {
+            id_parroquia: parroquiaActiva.id_parroquia,
+            nombre: parroquiaActiva.nombre
+          }
+        : null,
       token
     });
 
@@ -544,6 +562,7 @@ const loginUsuario = async (req, res) => {
     });
   }
 };
+
 const verificarCodigo2FA = async (req, res) => {
   const { token2FA, codigo } = req.body;
 
@@ -577,11 +596,23 @@ const verificarCodigo2FA = async (req, res) => {
         email: data.email,
         activo: true
       },
-      include: [{
-        model: Rol,
-        as: 'rol',
-        attributes: ['id_rol', 'nombre']
-      }]
+      include: [
+        {
+          model: Rol,
+          as: 'rol',
+          attributes: ['id_rol', 'nombre']
+        },
+        {
+          model: Parroquia,
+          as: 'parroquias',
+          attributes: ['id_parroquia', 'nombre'],
+          through: {
+            attributes: [],
+            where: { activo: true }
+          },
+          required: false
+        }
+      ]
     });
 
     if (!usuario) {
@@ -591,28 +622,38 @@ const verificarCodigo2FA = async (req, res) => {
       });
     }
 
+    const parroquiaActiva = usuario.parroquias?.[0] || null;
+
     await resetearIntentos(usuario);
 
     const token = await generarJWT(usuario.id_usuario, usuario.email);
 
-    res.json({
+    return res.json({
       ok: true,
       requiere2FA: false,
       uid: usuario.id_usuario,
       email: usuario.email,
       nombre: usuario.nombre,
       rol: usuario.rol,
+      parroquia: parroquiaActiva
+        ? {
+            id_parroquia: parroquiaActiva.id_parroquia,
+            nombre: parroquiaActiva.nombre
+          }
+        : null,
       token
     });
 
   } catch (error) {
     console.error(error);
-    res.status(500).json({
+
+    return res.status(500).json({
       ok: false,
       msg: 'Error al verificar el código 2FA'
     });
   }
 };
+
 const revalidarToken = async (req, res) => {
     const { uid, email } = req;
     if (!uid || !email) {
