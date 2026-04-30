@@ -1,4 +1,4 @@
-const DominioPermitido = require('../models/dominioPermitido');
+const DominioPermitido = require('../models/DominioPermitido');
 
 const getDominiosPermitidos = async (req, res) => {
   try {
