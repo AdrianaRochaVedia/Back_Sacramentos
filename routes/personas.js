@@ -1,14 +1,16 @@
 const { Router } = require('express');
 const { check } = require('express-validator');
 const { validarCampos } = require('../middlewares/validar-campos');
-const { getAllPersonas, crearPersona, getPersona, getPersonas, actualizarPersona, eliminarPersona } = require('../controllers/persona');
+const { getAllPersonas, crearPersona, getPersona, getPersonas, actualizarPersona, eliminarPersona, buscarPersonasParaSacramento } = require('../controllers/persona');
 const { validarJWT } = require('../middlewares/validar-jwt');
+const { validarPermiso } = require('../middlewares/validarPermiso');
 
 const router = Router();
 
 router.post(
     '/new',
      validarJWT,
+     validarPermiso('CREAR_PERSONA'),
     [
 
         check('nombre', 'El nombre es obligatorio').not().isEmpty(),
@@ -25,13 +27,16 @@ router.post(
     crearPersona
 );
 
-router.get('/', validarJWT,getPersonas);
+//endpoint para buscar personas para sacramento
+router.get('/buscar/sacramento', validarJWT, validarPermiso('VER_PERSONAS'), buscarPersonasParaSacramento);
 
-router.get('/all', validarJWT, getAllPersonas);
+router.get('/', validarJWT, validarPermiso('VER_PERSONAS'), getPersonas);
 
-router.get('/:id', validarJWT, getPersona);
+router.get('/all', validarJWT, validarPermiso('VER_PERSONAS'), getAllPersonas);
 
-router.put('/:id', validarJWT, [
+router.get('/:id', validarJWT, validarPermiso('VER_PERSONAS'), getPersona);
+
+router.put('/:id', validarJWT, validarPermiso('EDITAR_PERSONA'), [
     check('id', 'El ID debe ser un número válido').isInt(),
     check('nombre').optional().trim().notEmpty(),
     check('apellido_paterno').optional().trim().notEmpty(),
@@ -45,7 +50,7 @@ router.put('/:id', validarJWT, [
     validarCampos
 ], actualizarPersona);
 
-router.patch('/:id', validarJWT, [
+router.patch('/:id', validarJWT, validarPermiso('DESACTIVAR_PERSONA'),[
     check('id', 'El ID debe ser un número válido').isInt(),
     validarCampos
 ], eliminarPersona);

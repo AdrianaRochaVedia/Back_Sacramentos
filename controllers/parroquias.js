@@ -1,15 +1,43 @@
 const { response } = require('express');
 const Parroquia = require('../models/Parroquia');
+const { combinarCondiciones } = require('../middlewares/busqueda');
 
-// Obtener todos los tipos de sacramento activos
-const getParroquias = async (req, res) => {
+// Obtener todas las parroquias con búsqueda y filtros
+const getParroquias = async (req, res = response) => {
     try {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const offset = (page - 1) * limit;
+        
+        const { 
+            search,
+            nombre,
+            direccion,
+            telefono,
+            email
+        } = req.query;
+  
+        const camposBusqueda = [
+            'nombre',
+            'direccion',
+            'telefono',
+            'email'
+        ];
+        
+        const filtros = {
+            nombre,
+            direccion,
+            telefono,
+            email
+        };
+        
+        const whereConditions = combinarCondiciones(search, camposBusqueda, filtros);
+
         const { count, rows } = await Parroquia.findAndCountAll({
+            where: whereConditions,
             offset,
-            limit
+            limit,
+            order: [['nombre', 'ASC']] 
         });
 
         res.json({
@@ -17,59 +45,44 @@ const getParroquias = async (req, res) => {
             parroquias: rows,
             totalItems: count,
             totalPages: Math.ceil(count / limit),
-            currentPage: page
+            currentPage: page,
+            filtros_aplicados: {
+                search,
+                nombre,
+                direccion,
+                telefono,
+                email
+            }
         });
     } catch (error) {
-        console.error(error);
+        console.error('Error en getParroquias:', error);
         res.status(500).json({
             ok: false,
-            msg: 'Error al obtener las parroquias'
+            msg: 'Error al obtener las parroquias',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
 
-// Obtener todos las parroquias
-// const getAllParroquias = async (req, res) => {
-//     try {
-//         const page = parseInt(req.query.page) || 1;
-//         const limit = parseInt(req.query.limit) || 10;
-//         const offset = (page - 1) * limit;
-//         const { count, rows } = await Parroquias.findAndCountAll({
-//             offset,
-//             limit
-//         });
-
-//         res.json({
-//             ok: true,
-//             tipo_sacramento: rows,
-//             totalItems: count,
-//             totalPages: Math.ceil(count / limit),
-//             currentPage: page
-//         });
-//     } catch (error) {
-//         console.error(error);
-//         res.status(500).json({
-//             ok: false,
-//             msg: 'Error al obtener todos los tipos de sacramento'
-//         });
-//     }
-// };
-
-
 const crearParroquia = async (req, res) => {
-  const { nombre, direccion, telefono, email } = req.body;
+  const { nombre, direccion, telefono, email,id_persona } = req.body;
 
   try {
     const existe = await Parroquia.findOne({ where: { nombre } });
     if (existe) {
       return res.status(400).json({ ok: false, msg: 'La parroquia ya está registrada' });
     }
+    const existeEmail =  await Parroquia.findOne({ where: { email } });
+    if (existeEmail) {
+      return res.status(400).json({ ok: false, msg: 'El email ya está registrado' });
+    }
 
     const parroquia = await Parroquia.create({
       nombre,
       direccion,
       telefono,
-      email
+      email,
+      id_persona
     });
     res.status(201).json({
       ok: true,
@@ -78,7 +91,8 @@ const crearParroquia = async (req, res) => {
         nombre: parroquia.nombre,
         direccion: parroquia.direccion,
         telefono: parroquia.telefono,
-        email: parroquia.email
+        email: parroquia.email,
+        id_persona: parroquia.id_persona
       },
     });
   } catch (err) {
