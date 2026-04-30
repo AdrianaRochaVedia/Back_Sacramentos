@@ -10,6 +10,7 @@ const audRoutes = require('./routes/auditoriaRoutes');
 const errorHandler = require('./middlewares/error-handler');
 const app = express();
 const dashboardRoutes = require('./routes/dashboardRoutes');
+const dominioPermitidoRoute = require('./routes/dominioPermitidoRoute');
 
 app.set('trust proxy', true);
 
@@ -160,6 +161,11 @@ app.use('/api/matrimoniodetalles', require('./routes/matrimoniodetalles'));
 app.use('/api/personasacramentos', require('./routes/personasacramentos'));
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/password', passwordRoutes);
+app.use('/api/rol', require('./routes/rolRoute'));
+app.use('/api/permiso', require('./routes/permisoRoute'));
+app.use('/api/configuracion-seguridad', require('./routes/configuracionSeguridadRoute'));
+app.use('/api/dominio-permitido', dominioPermitidoRoute);
+
 
 app.get('/api/proxy-pdf', async (req, res) => {
   try {
