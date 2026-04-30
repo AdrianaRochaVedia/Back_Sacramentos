@@ -273,9 +273,7 @@ const crearUsuario = async (req, res) => {
               return res.status(400).json({ ok: false, msg: 'La parroquia especificada no existe' });
           }
         } 
-        if (!id_parroquia){
-          return res.status(400).json({ ok: false, msg: 'La parroquia es obligatoria' });
-        }
+        
 
         let passwordPlana;
         if (password && password.trim() !== '') {
