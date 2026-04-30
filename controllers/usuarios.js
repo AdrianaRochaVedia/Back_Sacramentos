@@ -399,63 +399,85 @@ const crearUsuario = async (req, res) => {
 // };
 
 
-//Login sin captcha
 const loginUsuario = async (req, res) => {
-  const { email, password /*, turnstileToken */ } = req.body;
+  const { email, password, turnstileToken } = req.body;
 
   try {
-    // ============================
-    // CAPTCHA (DESACTIVADO POR AHORA)
-    // ============================
-    /*
-    const captchaResult = await verifyTurnstileToken({
-      token: turnstileToken,
-      remoteip: req.ip
+    const config = await ConfiguracionSeguridad.findOne({
+      where: { activo: true }
     });
 
-    if (!captchaResult.ok) {
-      return res.status(400).json({
+    if (!config) {
+      return res.status(500).json({
         ok: false,
-        msg: captchaResult.msg,
-        errors: captchaResult.errors || []
+        msg: 'No hay configuración de seguridad registrada'
       });
     }
-    */
+
+    const usaCaptcha = config.usa_captcha === true;
+
+    if (usaCaptcha) {
+      if (!turnstileToken) {
+        return res.status(400).json({
+          ok: false,
+          msg: 'Debe completar la verificación captcha'
+        });
+      }
+
+      const captchaResult = await verifyTurnstileToken({
+        token: turnstileToken,
+        remoteip: req.ip
+      });
+
+      if (!captchaResult.ok) {
+        return res.status(400).json({
+          ok: false,
+          msg: captchaResult.msg || 'Captcha inválido',
+          errors: captchaResult.errors || []
+        });
+      }
+    }
 
     const usuario = await Usuario.findOne({
       where: { email, activo: true },
-      include: [{
-        model: Rol,
-        as: 'rol',
-        attributes: ['id_rol', 'nombre']
-      }]
+      include: [
+        {
+          model: Rol,
+          as: 'rol',
+          attributes: ['id_rol', 'nombre']
+        }
+      ]
     });
 
     if (!usuario) {
-      return res.status(400).json({ ok: false, msg: 'Usuario no existe' });
+      return res.status(400).json({
+        ok: false,
+        msg: 'Usuario no existe'
+      });
     }
 
-    // ============================
-    // BLOQUEO
-    // ============================
     const bloqueo = await verificarBloqueo(usuario);
     if (bloqueo.bloqueado) {
-      return res.status(403).json({ ok: false, msg: bloqueo.msg });
+      return res.status(403).json({
+        ok: false,
+        msg: bloqueo.msg
+      });
     }
 
-    // ============================
-    // PASSWORD
-    // ============================
     const valid = bcrypt.compareSync(password, usuario.password);
+
     if (!valid) {
       const intento = await registrarIntentoFallido(usuario);
-      return res.status(400).json({ ok: false, msg: intento.msg });
+
+      return res.status(400).json({
+        ok: false,
+        msg: intento.msg,
+        bloqueado: intento.bloqueado || false
+      });
     }
 
-    // ============================
-    // EXPIRACIÓN
-    // ============================
     const expiracion = verificarExpiracion(usuario);
+
     if (expiracion.expirada) {
       return res.status(403).json({
         ok: false,
@@ -464,18 +486,8 @@ const loginUsuario = async (req, res) => {
       });
     }
 
-    // ============================
-    // CONFIGURACIÓN 2FA
-    // ============================
-    const config = await ConfiguracionSeguridad.findOne({
-      where: { activo: true }
-    });
+    const usa2FA = config.usa_2fa === true;
 
-    const usa2FA = config?.usa_2fa === true;
-
-    // ============================
-    // SI 2FA ESTÁ ACTIVO
-    // ============================
     if (usa2FA) {
       const codigo = generarCodigo2FA();
 
@@ -509,14 +521,11 @@ const loginUsuario = async (req, res) => {
       });
     }
 
-    // ============================
-    // LOGIN NORMAL
-    // ============================
     await resetearIntentos(usuario);
 
     const token = await generarJWT(usuario.id_usuario, usuario.email);
 
-    res.json({
+    return res.json({
       ok: true,
       requiere2FA: false,
       uid: usuario.id_usuario,
@@ -527,8 +536,12 @@ const loginUsuario = async (req, res) => {
     });
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ ok: false, msg: 'Hable con el administrador' });
+    console.error('Error en loginUsuario:', err);
+
+    return res.status(500).json({
+      ok: false,
+      msg: 'Hable con el administrador'
+    });
   }
 };
 const verificarCodigo2FA = async (req, res) => {
