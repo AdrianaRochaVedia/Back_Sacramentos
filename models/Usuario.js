@@ -94,5 +94,19 @@ Rol.hasMany(Usuario, {
   as: 'usuarios'
 });
 
+Usuario.associate = (models) => {
+  Usuario.belongsTo(models.Rol, {
+    foreignKey: 'id_rol',
+    as: 'rol'
+  });
+
+  Usuario.belongsToMany(models.Parroquia, {
+    through: models.UsuarioParroquia,
+    foreignKey: 'id_usuario',
+    otherKey: 'id_parroquia',
+    as: 'parroquias'
+  });
+};
+
 module.exports = Usuario;
 

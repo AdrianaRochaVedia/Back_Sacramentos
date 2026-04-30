@@ -166,7 +166,23 @@ const getUsuario = async (req, res) => {
     try {
         const usuario = await Usuario.findOne({
             where: { id_usuario: id, activo: true },
-            include: [{ model: Rol, as: 'rol', attributes: ['id_rol', 'nombre'] }]
+            include: [
+              {
+                model: Rol,
+                as: 'rol',
+                attributes: ['id_rol', 'nombre', 'descripcion'],
+                where: whereRol,
+                required: !!rol
+              },
+              {
+                model: Parroquia,
+                as: 'parroquias',
+                attributes: ['id_parroquia', 'nombre', 'direccion'],
+                through: {
+                  attributes: ['rol_en_parroquia', 'activo']
+                }
+              }
+            ],
         });
         if (!usuario) {
             return res.status(404).json({ ok: false, msg: 'Usuario no encontrado' });
@@ -180,7 +196,7 @@ const getUsuario = async (req, res) => {
 
 
 const crearUsuario = async (req, res) => {
-    const { nombre, apellido_paterno, apellido_materno, email, password, fecha_nacimiento, id_rol } = req.body;
+    const { nombre, apellido_paterno, apellido_materno, email, password, fecha_nacimiento, id_rol, id_parroquia } = req.body;
     try {
         const existe = await Usuario.findOne({ where: { email } });
         if (existe) {
@@ -196,11 +212,24 @@ const crearUsuario = async (req, res) => {
           });
         }
 
+        let rolExiste = null;
+
         if (id_rol) {
-            const rolExiste = await Rol.findByPk(id_rol);
+            rolExiste = await Rol.findByPk(id_rol);
             if (!rolExiste) {
                 return res.status(400).json({ ok: false, msg: 'El rol especificado no existe' });
             }
+        }
+
+        if (id_parroquia) {
+          const Parroquia = require('../models/Parroquia');
+          const parroquiaExiste = await Parroquia.findByPk(id_parroquia);
+          if (!parroquiaExiste) {
+              return res.status(400).json({ ok: false, msg: 'La parroquia especificada no existe' });
+          }
+        } 
+        if (!id_parroquia){
+          return res.status(400).json({ ok: false, msg: 'La parroquia es obligatoria' });
         }
 
         let passwordPlana;
@@ -232,9 +261,21 @@ const crearUsuario = async (req, res) => {
             password: passwordHasheada,
             fecha_nacimiento,
             id_rol: id_rol || null,
+            id_parroquia: id_parroquia || null,
             fecha_ultimo_cambio_password: new Date(),
             fecha_expiracion_password: fecha_expiracion
         });
+
+        if (id_parroquia) {
+          const rolAsignacion = rolExiste?.nombre || 'SIN_ROL';
+
+          await UsuarioParroquia.create({
+            id_usuario: usuario.id_usuario,
+            id_parroquia,
+            rol_en_parroquia: rolAsignacion,
+            activo: true,
+          });
+        }
 
         await guardarEnHistorial(usuario.id_usuario, passwordHasheada);
         const usuarioConRol = await Usuario.findByPk(usuario.id_usuario, {

@@ -32,4 +32,20 @@ const Parroquia = sequelize.define('Parroquia', {
   timestamps: false
 });
 
+Parroquia.associate = (models) => {
+
+  Parroquia.belongsToMany(models.Usuario, {
+
+    through: models.UsuarioParroquia,
+
+    foreignKey: 'id_parroquia',
+
+    otherKey: 'id_usuario',
+
+    as: 'usuarios'
+
+  });
+
+};
+
 module.exports = Parroquia;
