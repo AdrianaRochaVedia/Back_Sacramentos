@@ -11,6 +11,7 @@ const errorHandler = require('./middlewares/error-handler');
 const app = express();
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const dominioPermitidoRoute = require('./routes/dominioPermitidoRoute');
+const usuarioParroquiaRoute = require('./routes/usuarioParroquia');
 
 app.set('trust proxy', true);
 
@@ -149,6 +150,50 @@ app.use('/api/documentacion', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
   customSiteTitle: "API MIGA - Documentación"
 }));
 
+//ahhh prueba
+// =====================
+// MODELOS Y RELACIONES
+// =====================
+const Usuario = require('./models/Usuario');
+const Rol = require('./models/Rol');
+const Parroquia = require('./models/Parroquia');
+const UsuarioParroquia = require('./models/UsuarioParroquia');
+
+// Relaciones
+
+Usuario.belongsTo(Rol, {
+  foreignKey: 'id_rol',
+  as: 'rol',
+});
+
+Rol.hasMany(Usuario, {
+  foreignKey: 'id_rol',
+  as: 'usuarios',
+});
+
+Usuario.belongsToMany(Parroquia, {
+  through: UsuarioParroquia,
+  foreignKey: 'id_usuario',
+  otherKey: 'id_parroquia',
+  as: 'parroquias',
+});
+
+Parroquia.belongsToMany(Usuario, {
+  through: UsuarioParroquia,
+  foreignKey: 'id_parroquia',
+  otherKey: 'id_usuario',
+  as: 'usuarios',
+});
+
+UsuarioParroquia.belongsTo(Usuario, {
+  foreignKey: 'id_usuario',
+  as: 'usuario',
+});
+
+UsuarioParroquia.belongsTo(Parroquia, {
+  foreignKey: 'id_parroquia',
+  as: 'parroquia',
+});
 // Routes
 app.use('/api/auditoria', audRoutes);
 app.use('/api/usuarios', require('./routes/usuarios'));
@@ -165,8 +210,7 @@ app.use('/api/rol', require('./routes/rolRoute'));
 app.use('/api/permiso', require('./routes/permisoRoute'));
 app.use('/api/configuracion-seguridad', require('./routes/configuracionSeguridadRoute'));
 app.use('/api/dominio-permitido', dominioPermitidoRoute);
-
-
+app.use('/api/usuario-parroquia', usuarioParroquiaRoute);
 app.get('/api/proxy-pdf', async (req, res) => {
   try {
     const url = req.query.url;
