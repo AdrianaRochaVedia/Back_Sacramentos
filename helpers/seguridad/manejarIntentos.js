@@ -24,7 +24,7 @@ const registrarIntentoFallido = async (usuario) => {
         });
         return {
             bloqueado: true,
-            msg: `Usuario bloqueado por ${config.tiempo_bloqueo_minutos} minuto(s) por demasiados intentos fallidos`
+            msg: `Usuario bloqueado por demasiados intentos fallidos (${nuevoIntentos}/${config.max_intentos_fallidos}). Contacte al administrador de usuarios.`
         };
     }
 

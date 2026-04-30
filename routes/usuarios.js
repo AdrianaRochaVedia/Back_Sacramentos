@@ -5,6 +5,7 @@ const { getAllUsuarios, crearUsuario, loginUsuario, revalidarToken, getUsuario, 
 const { validarJWT } = require('../middlewares/validar-jwt');
 const { passwordFuerte } = require('../helpers/validar-password');
 const { validarPermiso } = require('../middlewares/validarPermiso');
+const { verificarCodigo2FA } = require('../controllers/usuarios');
 
 const router = Router();
 
