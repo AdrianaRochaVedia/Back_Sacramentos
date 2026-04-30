@@ -12,6 +12,10 @@ const { passwordFuerte } = require('../helpers/validar-password');
 const { verificarBloqueo, registrarIntentoFallido, resetearIntentos } = require('../helpers/seguridad/manejarIntentos');
 const { verificarHistorial, guardarEnHistorial } = require('../helpers/seguridad/manejarHistorial');
 const verificarExpiracion = require('../helpers/seguridad/verificarExpiracion');
+const { generarCodigo2FA } = require('../helpers/twoFactorCode');
+const { generarToken2FA, verificarToken2FA } = require('../helpers/twoFactorToken');
+const { sendMail } = require('../helpers/mailer');
+const { twoFactorEmail } = require('../helpers/emailTemplates');
 
 const validarDominioCorreo = async (email) => {
   if (!email || !email.includes('@')) return false;
@@ -331,30 +335,72 @@ const loginUsuario = async (req, res) => {
       return res.status(400).json({ ok: false, msg: 'Usuario no existe' });
     }
 
-    //Verificar si esta bloqueado
     const bloqueo = await verificarBloqueo(usuario);
     if (bloqueo.bloqueado) {
       return res.status(403).json({ ok: false, msg: bloqueo.msg });
     }
 
-    //Verificar el password
     const valid = bcrypt.compareSync(password, usuario.password);
     if (!valid) {
       const intento = await registrarIntentoFallido(usuario);
       return res.status(400).json({ ok: false, msg: intento.msg });
     }
 
-    //Verificar expiracion del password
     const expiracion = verificarExpiracion(usuario);
     if (expiracion.expirada) {
-      return res.status(403).json({ ok: false, msg: expiracion.msg, passwordExpirada: true });
+      return res.status(403).json({
+        ok: false,
+        msg: expiracion.msg,
+        passwordExpirada: true
+      });
+    }
+
+    const config = await ConfiguracionSeguridad.findOne({
+      where: { activo: true }
+    });
+
+    const usa2FA = config?.usa_2fa === true;
+
+    if (usa2FA) {
+      const codigo = generarCodigo2FA();
+
+      const token2FA = await generarToken2FA({
+        uid: usuario.id_usuario,
+        email: usuario.email,
+        codigo,
+        tipo: '2fa'
+      });
+
+      const appName = process.env.APP_NAME || 'Sacramentos';
+
+      const emailData = twoFactorEmail({
+        appName,
+        codigo,
+        minutes: 10
+      });
+
+      await sendMail({
+        to: usuario.email,
+        subject: emailData.subject,
+        text: emailData.text,
+        html: emailData.html
+      });
+
+      return res.json({
+        ok: true,
+        requiere2FA: true,
+        token2FA,
+        msg: 'Se envió un código de verificación al correo del usuario'
+      });
     }
 
     await resetearIntentos(usuario);
+
     const token = await generarJWT(usuario.id_usuario, usuario.email);
 
     res.json({
       ok: true,
+      requiere2FA: false,
       uid: usuario.id_usuario,
       email: usuario.email,
       nombre: usuario.nombre,
@@ -367,7 +413,75 @@ const loginUsuario = async (req, res) => {
     res.status(500).json({ ok: false, msg: 'Hable con el administrador' });
   }
 };
-  
+const verificarCodigo2FA = async (req, res) => {
+  const { token2FA, codigo } = req.body;
+
+  try {
+    if (!token2FA || !codigo) {
+      return res.status(400).json({
+        ok: false,
+        msg: 'El token temporal y el código son obligatorios'
+      });
+    }
+
+    const data = verificarToken2FA(token2FA);
+
+    if (!data || data.tipo !== '2fa') {
+      return res.status(401).json({
+        ok: false,
+        msg: 'El código expiró. Vuelve a iniciar sesión'
+      });
+    }
+
+    if (data.codigo !== codigo) {
+      return res.status(400).json({
+        ok: false,
+        msg: 'Código incorrecto'
+      });
+    }
+
+    const usuario = await Usuario.findOne({
+      where: {
+        id_usuario: data.uid,
+        email: data.email,
+        activo: true
+      },
+      include: [{
+        model: Rol,
+        as: 'rol',
+        attributes: ['id_rol', 'nombre']
+      }]
+    });
+
+    if (!usuario) {
+      return res.status(400).json({
+        ok: false,
+        msg: 'Usuario no válido'
+      });
+    }
+
+    await resetearIntentos(usuario);
+
+    const token = await generarJWT(usuario.id_usuario, usuario.email);
+
+    res.json({
+      ok: true,
+      requiere2FA: false,
+      uid: usuario.id_usuario,
+      email: usuario.email,
+      nombre: usuario.nombre,
+      rol: usuario.rol,
+      token
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      ok: false,
+      msg: 'Error al verificar el código 2FA'
+    });
+  }
+};
 const revalidarToken = async (req, res) => {
     const { uid, email } = req;
     if (!uid || !email) {
@@ -483,5 +597,6 @@ const eliminarUsuario = async (req, res = response) => {
     revalidarToken,
     actualizarUsuario,
     eliminarUsuario,
-    getAllUsuarios
+    getAllUsuarios,
+    verificarCodigo2FA
   };

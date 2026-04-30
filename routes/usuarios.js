@@ -1,7 +1,17 @@
 const { Router } = require('express');
 const { check } = require('express-validator');
 const { validarCampos } = require('../middlewares/validar-campos');
-const { getAllUsuarios, crearUsuario, loginUsuario, revalidarToken, getUsuario, getUsuarios, actualizarUsuario, eliminarUsuario } = require('../controllers/usuarios');
+const {
+  getAllUsuarios,
+  crearUsuario,
+  loginUsuario,
+  verificarCodigo2FA,
+  revalidarToken,
+  getUsuario,
+  getUsuarios,
+  actualizarUsuario,
+  eliminarUsuario
+} = require('../controllers/usuarios');
 const { validarJWT } = require('../middlewares/validar-jwt');
 const { passwordFuerte } = require('../helpers/validar-password');
 const { validarPermiso } = require('../middlewares/validarPermiso');
@@ -13,7 +23,11 @@ router.post('/', [
     check('password', 'La contraseña es obligatoria').notEmpty(),
     validarCampos
 ], loginUsuario);
-
+router.post('/verificar-2fa', [
+  check('token2FA', 'El token temporal es obligatorio').notEmpty(),
+  check('codigo', 'El código debe tener 6 dígitos').isLength({ min: 6, max: 6 }),
+  validarCampos
+], verificarCodigo2FA);
 router.get('/renew', validarJWT, revalidarToken);
 
 router.post('/new', validarJWT, validarPermiso('CREAR_USUARIO'), [

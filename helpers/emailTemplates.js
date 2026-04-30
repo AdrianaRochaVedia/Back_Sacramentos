@@ -26,4 +26,34 @@ Este enlace vence en ${minutes} minutos. Si no fuiste tú, ignora este mensaje.`
   return { subject, text, html };
 }
 
-module.exports = { resetPasswordEmail };
+function twoFactorEmail({ appName, codigo, minutes = 10 }) {
+  const subject = `${appName} – Código de verificación`;
+
+  const text =
+`Tu código de verificación para ${appName} es:
+
+${codigo}
+
+Este código vence en ${minutes} minutos. Si no fuiste tú, ignora este mensaje.`;
+
+  const html = `
+  <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;">
+    <h2 style="margin:0 0 12px;">${appName} – Verificación en dos pasos</h2>
+    <p style="margin:0 0 16px;">Usa el siguiente código para completar tu inicio de sesión:</p>
+
+    <div style="font-size:34px;font-weight:700;letter-spacing:8px;text-align:center;background:#f4f4f4;padding:18px;border-radius:10px;margin:22px 0;">
+      ${codigo}
+    </div>
+
+    <p style="margin:0 0 12px;">Este código vence en <strong>${minutes} minutos</strong>.</p>
+    <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
+    <p style="font-size:12px;color:#666;margin:0;">Si no intentaste iniciar sesión, puedes ignorar este correo.</p>
+  </div>`;
+
+  return { subject, text, html };
+}
+
+module.exports = {
+  resetPasswordEmail,
+  twoFactorEmail
+};
