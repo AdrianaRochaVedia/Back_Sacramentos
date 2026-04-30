@@ -13,7 +13,11 @@ router.post('/', [
     check('password', 'La contraseña es obligatoria').notEmpty(),
     validarCampos
 ], loginUsuario);
-
+router.post('/verificar-2fa', [
+  check('token2FA', 'El token temporal es obligatorio').notEmpty(),
+  check('codigo', 'El código debe tener 6 dígitos').isLength({ min: 6, max: 6 }),
+  validarCampos
+], verificarCodigo2FA);
 router.get('/renew', validarJWT, revalidarToken);
 
 router.post('/new', validarJWT, validarPermiso('CREAR_USUARIO'), [
