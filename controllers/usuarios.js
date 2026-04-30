@@ -4,7 +4,9 @@ const crypto = require('crypto');
 const Usuario = require('../models/Usuario');
 const Rol = require('../models/Rol');
 const ConfiguracionSeguridad = require('../models/ConfiguracionSeguridad');
-const DominioPermitido = require('../models/DominioPermitido');
+const DominioPermitido = require('../models/dominioPermitido');
+const UsuarioParroquia = require('../models/UsuarioParroquia');
+const Parroquia = require('../models/Parroquia');
 const { generarJWT } = require('../helpers/jwt');
 const { combinarCondiciones } = require('../middlewares/busqueda');
 const { verifyTurnstileToken } = require('../helpers/turnstile');
@@ -78,6 +80,18 @@ const getUsuarios = async (req, res) => {
           attributes: ['id_rol', 'nombre', 'descripcion'],
           where: whereRol,
           required: !!rol
+        },
+        {
+          model: Parroquia,
+          as: 'parroquias',
+          attributes: ['id_parroquia', 'nombre', 'direccion'],
+          through: {
+            attributes: ['rol_en_parroquia', 'activo'],
+            where: {
+              activo: true
+            }
+          },
+          required: false
         }
       ],
       offset,
@@ -132,6 +146,19 @@ const getAllUsuarios = async (req, res) => {
           as: 'rol',
           attributes: ['id_rol', 'nombre', 'descripcion'],
           required: false
+        },
+        
+         {
+          model: Parroquia,
+          as: 'parroquias',
+          attributes: ['id_parroquia', 'nombre', 'direccion'],
+          through: {
+            attributes: ['rol_en_parroquia', 'activo'],
+            where: {
+              activo: true
+            }
+          },
+          required: false
         }
       ],
       offset,
@@ -162,25 +189,51 @@ const getAllUsuarios = async (req, res) => {
 };
 // Obtener un usuario por ID
 const getUsuario = async (req, res) => {
-    const { id } = req.params;
-    try {
-        const usuario = await Usuario.findOne({
-            where: { id_usuario: id, activo: true },
-            include: [{ model: Rol, as: 'rol', attributes: ['id_rol', 'nombre'] }]
-        });
-        if (!usuario) {
-            return res.status(404).json({ ok: false, msg: 'Usuario no encontrado' });
+  const { id } = req.params;
+
+  try {
+    const usuario = await Usuario.findOne({
+      where: { id_usuario: id, activo: true },
+      attributes: {
+        exclude: ['password', 'password_hash']
+      },
+      include: [
+        {
+          model: Rol,
+          as: 'rol',
+          attributes: ['id_rol', 'nombre', 'descripcion'],
+          required: false
+        },
+         {
+          model: Parroquia,
+          as: 'parroquias',
+          attributes: ['id_parroquia', 'nombre', 'direccion'],
+          through: {
+            attributes: ['rol_en_parroquia', 'activo'],
+            where: {
+              activo: true
+            }
+          },
+          required: false
         }
-        res.json({ ok: true, usuario });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ ok: false, msg: 'Error al obtener usuario' });
+      ],
+    });
+
+    if (!usuario) {
+      return res.status(404).json({ ok: false, msg: 'Usuario no encontrado' });
     }
+
+    res.json({ ok: true, usuario });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false, msg: 'Error al obtener usuario' });
+  }
 };
 
 
 const crearUsuario = async (req, res) => {
-    const { nombre, apellido_paterno, apellido_materno, email, password, fecha_nacimiento, id_rol } = req.body;
+    const { nombre, apellido_paterno, apellido_materno, email, password, fecha_nacimiento, id_rol, id_parroquia } = req.body;
     try {
         const existe = await Usuario.findOne({ where: { email } });
         if (existe) {
@@ -196,11 +249,24 @@ const crearUsuario = async (req, res) => {
           });
         }
 
+        let rolExiste = null;
+
         if (id_rol) {
-            const rolExiste = await Rol.findByPk(id_rol);
+            rolExiste = await Rol.findByPk(id_rol);
             if (!rolExiste) {
                 return res.status(400).json({ ok: false, msg: 'El rol especificado no existe' });
             }
+        }
+
+        if (id_parroquia) {
+          const Parroquia = require('../models/Parroquia');
+          const parroquiaExiste = await Parroquia.findByPk(id_parroquia);
+          if (!parroquiaExiste) {
+              return res.status(400).json({ ok: false, msg: 'La parroquia especificada no existe' });
+          }
+        } 
+        if (!id_parroquia){
+          return res.status(400).json({ ok: false, msg: 'La parroquia es obligatoria' });
         }
 
         let passwordPlana;
@@ -232,9 +298,21 @@ const crearUsuario = async (req, res) => {
             password: passwordHasheada,
             fecha_nacimiento,
             id_rol: id_rol || null,
+            id_parroquia: id_parroquia || null,
             fecha_ultimo_cambio_password: new Date(),
             fecha_expiracion_password: fecha_expiracion
         });
+
+        if (id_parroquia) {
+          const rolAsignacion = rolExiste?.nombre || 'SIN_ROL';
+
+          await UsuarioParroquia.create({
+            id_usuario: usuario.id_usuario,
+            id_parroquia,
+            rol_en_parroquia: rolAsignacion,
+            activo: true,
+          });
+        }
 
         await guardarEnHistorial(usuario.id_usuario, passwordHasheada);
         const usuarioConRol = await Usuario.findByPk(usuario.id_usuario, {
@@ -387,7 +465,7 @@ const revalidarToken = async (req, res) => {
 //Funcion para editar al usuario
 const actualizarUsuario = async (req, res = response) => {
     const { id } = req.params;
-    const { nombre, apellido_paterno, apellido_materno, email, password, fecha_nacimiento, id_rol } = req.body;
+    const { nombre, apellido_paterno, apellido_materno, email, password, fecha_nacimiento, id_rol, id_parroquia } = req.body;
     try {
         const usuario = await Usuario.findOne({ where: { id_usuario: id, activo: true } });
         if (!usuario) {
@@ -405,6 +483,15 @@ const actualizarUsuario = async (req, res = response) => {
                 return res.status(400).json({ ok: false, msg: 'El rol especificado no existe' });
             }
         }
+          if (id_parroquia !== undefined) { 
+            if (id_parroquia !== null && id_parroquia !== '') {
+              const parroquiaExiste = await Parroquia.findByPk(id_parroquia);
+              if (!parroquiaExiste) {
+                  return res.status(400).json({ ok: false, msg: 'La parroquia especificada no existe' });
+              }
+            } 
+          }
+
 
         const updates = {};
         if (nombre !== undefined) updates.nombre = nombre;
@@ -444,6 +531,57 @@ const actualizarUsuario = async (req, res = response) => {
         }
 
         await usuario.update(updates);
+
+        //para la parroquia
+        if (id_parroquia !== undefined) {
+          if (id_parroquia !== null && id_parroquia !== '') {
+            const parroquiaExiste = await Parroquia.findByPk(id_parroquia);
+
+            if (!parroquiaExiste) {
+              return res.status(400).json({
+                ok: false,
+                msg: 'La parroquia especificada no existe'
+              });
+            }
+
+            const rolActual = id_rol
+              ? await Rol.findByPk(id_rol)
+              : await Rol.findByPk(usuario.id_rol);
+
+            await UsuarioParroquia.update(
+              {
+                activo: false,
+                fecha_fin: new Date()
+              },
+              {
+                where: {
+                  id_usuario: usuario.id_usuario,
+                  activo: true
+                }
+              }
+            );
+
+            await UsuarioParroquia.create({
+              id_usuario: usuario.id_usuario,
+              id_parroquia: Number(id_parroquia),
+              rol_en_parroquia: rolActual?.nombre || 'SIN_ROL',
+              activo: true
+            });
+          } else {
+            await UsuarioParroquia.update(
+              {
+                activo: false,
+                fecha_fin: new Date()
+              },
+              {
+                where: {
+                  id_usuario: usuario.id_usuario,
+                  activo: true
+                }
+              }
+            );
+          }
+        }
         const usuarioActualizado = await Usuario.findByPk(id, {
             include: [{ model: Rol, as: 'rol', attributes: ['id_rol', 'nombre'] }]
         });
@@ -468,6 +606,19 @@ const eliminarUsuario = async (req, res = response) => {
         }
 
         await usuario.update({ activo: false });
+
+        await UsuarioParroquia.update(
+          {
+            activo: false,
+            fecha_fin: new Date()
+          },
+          {
+            where: {
+              id_usuario: id,
+              activo: true
+            }
+          }
+        );
         res.json({ ok: true, msg: 'Usuario eliminado correctamente' });
     } catch (error) {
         console.error('Error al eliminar el usuario:', error);
