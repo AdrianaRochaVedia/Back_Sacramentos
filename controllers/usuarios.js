@@ -17,7 +17,10 @@ const verificarExpiracion = require('../helpers/seguridad/verificarExpiracion');
 const { generarCodigo2FA } = require('../helpers/twoFactorCode');
 const { generarToken2FA, verificarToken2FA } = require('../helpers/twoFactorToken');
 const { sendMail } = require('../helpers/mailer');
-const { twoFactorEmail } = require('../helpers/emailTemplates');
+const {
+  twoFactorEmail,
+  cuentaDesbloqueadaEmail
+} = require('../helpers/emailTemplates');
 
 const validarDominioCorreo = async (email) => {
   if (!email || !email.includes('@')) return false;
@@ -740,23 +743,59 @@ const eliminarUsuario = async (req, res = response) => {
     }
 };
 
-const desbloquearUsuario = async (req, res) => {  
-    const { id } = req.params;
-    try {
-        const usuario = await Usuario.findOne({ where: { id_usuario: id } });
-        if (!usuario) {
-            return res.status(404).json({ ok: false, msg: 'Usuario no encontrado' });
-        }
+const desbloquearUsuario = async (req, res) => {
+  const { id } = req.params;
 
-        await resetearIntentos(usuario);
+  try {
+    const usuario = await Usuario.findOne({
+      where: { id_usuario: id }
+    });
 
-        await usuario.update({ bloqueado: false, fecha_bloqueo: null});
-        res.json({ ok: true, msg: 'Usuario desbloqueado correctamente' });
-    } catch (error) {
-        console.error('Error al desbloquear el usuario:', error);
-        res.status(500).json({ ok: false, msg: 'Error al desbloquear el usuario' });
+    if (!usuario) {
+      return res.status(404).json({
+        ok: false,
+        msg: 'Usuario no encontrado'
+      });
     }
-}
+
+    await resetearIntentos(usuario);
+
+    try {
+      if (usuario.email) {
+        const appName = process.env.APP_NAME || 'Sacramentos';
+
+        const tpl = cuentaDesbloqueadaEmail({
+          appName,
+          nombre: usuario.nombre
+        });
+
+        await sendMail({
+          to: usuario.email,
+          subject: tpl.subject,
+          text: tpl.text,
+          html: tpl.html
+        });
+      }
+    } catch (mailError) {
+      console.warn(
+        'No se pudo enviar correo de desbloqueo:',
+        mailError?.message || mailError
+      );
+    }
+
+    return res.json({
+      ok: true,
+      msg: 'Usuario desbloqueado correctamente'
+    });
+
+  } catch (error) {
+    console.error('Error al desbloquear el usuario:', error);
+    return res.status(500).json({
+      ok: false,
+      msg: 'Error al desbloquear el usuario'
+    });
+  }
+};
 
   module.exports = {
     getUsuarios,

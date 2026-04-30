@@ -1,11 +1,21 @@
 const { Router } = require('express');
 const { check } = require('express-validator');
 const { validarCampos } = require('../middlewares/validar-campos');
-const { getAllUsuarios, crearUsuario, loginUsuario, revalidarToken, getUsuario, getUsuarios, actualizarUsuario, eliminarUsuario, desbloquearUsuario } = require('../controllers/usuarios');
+const {
+  getAllUsuarios,
+  crearUsuario,
+  loginUsuario,
+  revalidarToken,
+  getUsuario,
+  getUsuarios,
+  actualizarUsuario,
+  eliminarUsuario,
+  desbloquearUsuario,
+  verificarCodigo2FA
+} = require('../controllers/usuarios');
 const { validarJWT } = require('../middlewares/validar-jwt');
 const { passwordFuerte } = require('../helpers/validar-password');
 const { validarPermiso } = require('../middlewares/validarPermiso');
-const { verificarCodigo2FA } = require('../controllers/usuarios');
 
 const router = Router();
 
