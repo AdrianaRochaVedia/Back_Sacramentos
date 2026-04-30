@@ -626,6 +626,24 @@ const eliminarUsuario = async (req, res = response) => {
     }
 };
 
+const desbloquearUsuario = async (req, res) => {  
+    const { id } = req.params;
+    try {
+        const usuario = await Usuario.findOne({ where: { id_usuario: id } });
+        if (!usuario) {
+            return res.status(404).json({ ok: false, msg: 'Usuario no encontrado' });
+        }
+
+        await resetearIntentos(usuario);
+
+        await usuario.update({ bloqueado: false, fecha_bloqueo: null});
+        res.json({ ok: true, msg: 'Usuario desbloqueado correctamente' });
+    } catch (error) {
+        console.error('Error al desbloquear el usuario:', error);
+        res.status(500).json({ ok: false, msg: 'Error al desbloquear el usuario' });
+    }
+}
+
   module.exports = {
     getUsuarios,
     crearUsuario,
@@ -634,5 +652,6 @@ const eliminarUsuario = async (req, res = response) => {
     revalidarToken,
     actualizarUsuario,
     eliminarUsuario,
-    getAllUsuarios
+    getAllUsuarios,
+    desbloquearUsuario
   };

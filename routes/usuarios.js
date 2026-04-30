@@ -1,7 +1,7 @@
 const { Router } = require('express');
 const { check } = require('express-validator');
 const { validarCampos } = require('../middlewares/validar-campos');
-const { getAllUsuarios, crearUsuario, loginUsuario, revalidarToken, getUsuario, getUsuarios, actualizarUsuario, eliminarUsuario } = require('../controllers/usuarios');
+const { getAllUsuarios, crearUsuario, loginUsuario, revalidarToken, getUsuario, getUsuarios, actualizarUsuario, eliminarUsuario, desbloquearUsuario } = require('../controllers/usuarios');
 const { validarJWT } = require('../middlewares/validar-jwt');
 const { passwordFuerte } = require('../helpers/validar-password');
 const { validarPermiso } = require('../middlewares/validarPermiso');
@@ -49,5 +49,7 @@ router.patch('/:id', validarJWT, validarPermiso('DESACTIVAR_USUARIO'), [
     check('id', 'El ID debe ser un número válido').isInt(),
     validarCampos
 ], eliminarUsuario);
+
+router.post('/desbloquear/:id', validarJWT, validarPermiso('DESBLOQUEAR_USUARIO'), desbloquearUsuario);
 
 module.exports = router;
