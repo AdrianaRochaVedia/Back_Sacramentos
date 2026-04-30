@@ -10,18 +10,29 @@ const audRoutes = require('./routes/auditoriaRoutes');
 const errorHandler = require('./middlewares/error-handler');
 const app = express();
 const dashboardRoutes = require('./routes/dashboardRoutes');
+const dominioPermitidoRoute = require('./routes/dominioPermitidoRoute');
+const usuarioParroquiaRoute = require('./routes/usuarioParroquia');
 
 app.set('trust proxy', true);
-app.use(cors());
+
+app.use(cors({
+  origin: [
+    'http://localhost:5173',
+    'https://fronttaller0.vercel.app'
+  ],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'x-token'],
+  credentials: true,
+}));
+
 app.use(express.static('public'));
 app.use(express.json());
-// ... después de app = express() y middlewares base:
+
 const correlation = require('./middlewares/correlation');
 const auditar = require('./middlewares/auditar');
 
-app.use(correlation());  // 1) genera/propaga x-correlation-id
-app.use(auditar());      // 2) registra TODAS las rutas
-
+app.use(correlation());
+app.use(auditar());
 
 // Helmet
 app.use(helmet({
@@ -30,91 +41,68 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       styleSrc: [
-        "'self'", 
-        "'unsafe-inline'", 
+        "'self'",
+        "'unsafe-inline'",
         'https://fonts.googleapis.com',
         'https://fonts.gstatic.com'
       ],
       fontSrc: [
-        "'self'", 
+        "'self'",
         'https://fonts.gstatic.com'
       ],
       scriptSrc: [
-        "'self'", 
-        "'unsafe-inline'" // Solo para Swagger, considera quitarlo en producción
+        "'self'",
+        "'unsafe-inline'"
       ],
       imgSrc: [
-        "'self'", 
-        'data:', 
+        "'self'",
+        'data:',
         'https:'
       ],
       connectSrc: [
-        "'self'", 
+        "'self'",
         'http://localhost:3000',
-        'http://localhost:5173', // Permite conexiones locales para desarrollo
-        'https://api.tu-dominio.com', // Reemplaza con tu API real
-        'https://*', // Permite conexiones HTTPS externas para el proxy
-        'http://*'   // Permite conexiones HTTP externas para el proxy (opcional, solo si necesitas HTTP)
+        'http://localhost:5173',
+        'https://fronttaller0.vercel.app',
+        'https://back-sacramentos.onrender.com',
+        'https://*',
+        'http://*'
       ],
       objectSrc: ["'none'"],
       baseUri: ["'self'"],
       formAction: ["'self'"],
-      frameAncestors: ["'deny'"], // Más restrictivo que 'self'
+      frameAncestors: ["'deny'"],
       upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null,
     },
   },
-  
-  // HSTS - HTTP Strict Transport Security
   hsts: process.env.NODE_ENV === 'production' ? {
-    maxAge: 31536000, // 1 año
+    maxAge: 31536000,
     includeSubDomains: true,
     preload: true
   } : false,
-  
-  // X-Frame-Options - Previene clickjacking
-  frameguard: { 
+  frameguard: {
     action: 'deny'
   },
-  
-  // X-Content-Type-Options - Previene MIME sniffing
   noSniff: true,
-  
-  // Ocultar X-Powered-By
   hidePoweredBy: true,
-  
-  // X-XSS-Protection
   xssFilter: true,
-  
-  // Referrer Policy
-  referrerPolicy: { 
-    policy: "strict-origin-when-cross-origin" 
+  referrerPolicy: {
+    policy: "strict-origin-when-cross-origin"
   },
-  
-  // Cross-Origin Policies
-  crossOriginOpenerPolicy: { 
-    policy: "same-origin" 
+  crossOriginOpenerPolicy: {
+    policy: "same-origin"
   },
-  
-  crossOriginResourcePolicy: { 
-    policy: "same-origin" 
+  crossOriginResourcePolicy: {
+    policy: "same-origin"
   },
-  
-  // Origin Agent Cluster
   originAgentCluster: true,
-  
-  // X-DNS-Prefetch-Control
-  dnsPrefetchControl: { 
-    allow: false 
+  dnsPrefetchControl: {
+    allow: false
   },
-  
-  // X-Download-Options
   ieNoOpen: true,
-  
-  // X-Permitted-Cross-Domain-Policies
   permittedCrossDomainPolicies: false
 }));
 
-//X-Powered-By no se muestre
 app.disable('x-powered-by');
 
 // Swagger configuration
@@ -127,20 +115,20 @@ const swaggerOptions = {
       version: '1.0.0',
       contact: {
         name: 'Soporte API MIGA',
-        email: 'soporte@miga.com' // email-real
+        email: 'soporte@miga.com'
       }
     },
     servers: [
-      { 
-        url: process.env.NODE_ENV === 'production' 
-          ? 'https://api.tu-dominio.com' 
-          : 'http://localhost:3000', 
-        description: process.env.NODE_ENV === 'production' ? 'Servidor de producción' : 'Servidor local' 
+      {
+        url: process.env.NODE_ENV === 'production'
+          ? 'https://back-sacramentos.onrender.com'
+          : 'http://localhost:3000',
+        description: process.env.NODE_ENV === 'production' ? 'Servidor de producción' : 'Servidor local'
       },
     ],
     components: {
       securitySchemes: {
-        xToken: { 
+        xToken: {
           type: 'apiKey',
           in: 'header',
           name: 'x-token',
@@ -162,11 +150,52 @@ app.use('/api/documentacion', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
   customSiteTitle: "API MIGA - Documentación"
 }));
 
+//ahhh prueba
+// =====================
+// MODELOS Y RELACIONES
+// =====================
+const Usuario = require('./models/Usuario');
+const Rol = require('./models/Rol');
+const Parroquia = require('./models/Parroquia');
+const UsuarioParroquia = require('./models/UsuarioParroquia');
+
+// Relaciones
+
+Usuario.belongsTo(Rol, {
+  foreignKey: 'id_rol',
+  as: 'rol',
+});
+
+Rol.hasMany(Usuario, {
+  foreignKey: 'id_rol',
+  as: 'usuarios',
+});
+
+Usuario.belongsToMany(Parroquia, {
+  through: UsuarioParroquia,
+  foreignKey: 'id_usuario',
+  otherKey: 'id_parroquia',
+  as: 'parroquias',
+});
+
+Parroquia.belongsToMany(Usuario, {
+  through: UsuarioParroquia,
+  foreignKey: 'id_parroquia',
+  otherKey: 'id_usuario',
+  as: 'usuarios',
+});
+
+UsuarioParroquia.belongsTo(Usuario, {
+  foreignKey: 'id_usuario',
+  as: 'usuario',
+});
+
+UsuarioParroquia.belongsTo(Parroquia, {
+  foreignKey: 'id_parroquia',
+  as: 'parroquia',
+});
 // Routes
 app.use('/api/auditoria', audRoutes);
-
-// Error handler al final
-
 app.use('/api/usuarios', require('./routes/usuarios'));
 app.use('/api/personas', require('./routes/personas'));
 app.use('/api/parroquias', require('./routes/parroquias'));
@@ -176,11 +205,12 @@ app.use('/api/sacramentos', require('./routes/sacramentos'));
 app.use('/api/matrimoniodetalles', require('./routes/matrimoniodetalles'));
 app.use('/api/personasacramentos', require('./routes/personasacramentos'));
 app.use('/api/dashboard', dashboardRoutes);
-
-
-
 app.use('/api/password', passwordRoutes);
-
+app.use('/api/rol', require('./routes/rolRoute'));
+app.use('/api/permiso', require('./routes/permisoRoute'));
+app.use('/api/configuracion-seguridad', require('./routes/configuracionSeguridadRoute'));
+app.use('/api/dominio-permitido', dominioPermitidoRoute);
+app.use('/api/usuario-parroquia', usuarioParroquiaRoute);
 app.get('/api/proxy-pdf', async (req, res) => {
   try {
     const url = req.query.url;
@@ -188,7 +218,6 @@ app.get('/api/proxy-pdf', async (req, res) => {
 
     if (!url) return res.status(400).json({ error: 'Falta la URL del PDF' });
 
-    // Validar que la URL sea válida
     try {
       new URL(url);
     } catch (error) {
@@ -196,22 +225,21 @@ app.get('/api/proxy-pdf', async (req, res) => {
     }
 
     console.log('Intentando obtener PDF desde:', url);
-    
+
     const response = await fetch(url, {
       headers: {
         'User-Agent': 'MIGA-API-Proxy/1.0'
       },
-      timeout: 10000 // 10 segundos timeout
+      timeout: 10000
     });
 
     if (!response.ok) {
       console.error(`Error al obtener PDF: ${response.status} ${response.statusText}`);
-      return res.status(response.status).json({ 
-        error: `No se pudo obtener el PDF externo: ${response.status} ${response.statusText}` 
+      return res.status(response.status).json({
+        error: `No se pudo obtener el PDF externo: ${response.status} ${response.statusText}`
       });
     }
 
-    // Verificar que el contenido sea un PDF
     const contentType = response.headers.get('content-type');
     if (!contentType || !contentType.includes('application/pdf')) {
       console.warn('El contenido no parece ser un PDF:', contentType);
@@ -226,14 +254,13 @@ app.get('/api/proxy-pdf', async (req, res) => {
     response.body.pipe(res);
   } catch (error) {
     console.error('Error proxy PDF:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Error interno del servidor al obtener el PDF',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
 
-// Error handler al final (después de TODAS las rutas)
 app.use(errorHandler());
 
 module.exports = app;

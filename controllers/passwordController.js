@@ -3,24 +3,35 @@ const bcrypt = require('bcryptjs');
 const { Op } = require('sequelize');
 const crypto = require('crypto');
 
-const Usuario = require('../models/Usuario'); // ya existe en tu proyecto
+const Usuario = require('../models/Usuario');
 const PasswordReset = require('../models/PasswordReset');
+const ConfiguracionSeguridad = require('../models/ConfiguracionSeguridad');
+const HistoricoPassword = require('../models/HistoricoPassword');
+
 const { generateTokenPair, addMinutes, maskEmail } = require('../helpers/passwordReset');
 const { sendMail } = require('../helpers/mailer');
 const { resetPasswordEmail } = require('../helpers/emailTemplates');
+const { passwordFuerte } = require('../helpers/validar-password');
 
-const TOKEN_TTL_MINUTES = 30; // vigencia del token
+const TOKEN_TTL_MINUTES = 30;
 const RESET_URL_BASE = process.env.PASSWORD_RESET_URL_BASE || 'https://tu-frontend.com/reset-password';
 
-// POST /api/password/solicitar   body: { email }
+// POST /api/password/solicitar
 exports.solicitar = async (req, res) => {
   try {
     const email = (req.body.email || '').trim().toLowerCase();
-    if (!email) return res.status(400).json({ ok: false, msg: 'Email requerido.' });
 
-    const usuario = await Usuario.findOne({ where: { email, activo: true } });
+    if (!email) {
+      return res.status(400).json({
+        ok: false,
+        msg: 'Email requerido.'
+      });
+    }
 
-    // Siempre responder 200 para no filtrar si existe o no
+    const usuario = await Usuario.findOne({
+      where: { email, activo: true }
+    });
+
     if (!usuario) {
       return res.json({
         ok: true,
@@ -28,11 +39,9 @@ exports.solicitar = async (req, res) => {
       });
     }
 
-    // Generar token (hash guardado)
     const { token, token_hash } = generateTokenPair();
     const expires_at = addMinutes(new Date(), TOKEN_TTL_MINUTES);
 
-    // purpose heurístico sin tocar usuarios: si no tiene password o está vacío => setup, si no => reset
     const purpose = (!usuario.password || usuario.password.trim() === '') ? 'setup' : 'reset';
 
     await PasswordReset.create({
@@ -42,21 +51,25 @@ exports.solicitar = async (req, res) => {
       purpose
     });
 
-    // Enviamos el correo desde el backend y también devolvemos la URL (opcional para debugging)
     const url = `${RESET_URL_BASE}?token=${token}`;
 
-    // Enviar correo de restablecimiento
     try {
       const appName = process.env.APP_NAME || 'Sacramentos';
-      const tpl = resetPasswordEmail({ appName, resetUrl: url, minutes: TOKEN_TTL_MINUTES });
+
+      const tpl = resetPasswordEmail({
+        appName,
+        resetUrl: url,
+        minutes: TOKEN_TTL_MINUTES
+      });
+
       await sendMail({
         to: email,
         subject: tpl.subject,
         html: tpl.html,
-        text: tpl.text,
+        text: tpl.text
       });
+
     } catch (mailErr) {
-      // No revelar estado de la cuenta por correo fallido
       console.warn('Error enviando email de reset:', mailErr?.message || mailErr);
     }
 
@@ -66,9 +79,13 @@ exports.solicitar = async (req, res) => {
       url,
       expiresAt: expires_at
     });
+
   } catch (e) {
     console.error(e);
-    return res.status(500).json({ ok: false, msg: 'Error generando enlace de recuperación.' });
+    return res.status(500).json({
+      ok: false,
+      msg: 'Error generando enlace de recuperación.'
+    });
   }
 };
 
@@ -76,9 +93,18 @@ exports.solicitar = async (req, res) => {
 exports.validar = async (req, res) => {
   try {
     const token = (req.query.token || '').trim();
-    if (!token) return res.status(400).json({ ok: false, msg: 'Token requerido.' });
 
-    const token_hash = crypto.createHash('sha256').update(token).digest('hex');
+    if (!token) {
+      return res.status(400).json({
+        ok: false,
+        msg: 'Token requerido.'
+      });
+    }
+
+    const token_hash = crypto
+      .createHash('sha256')
+      .update(token)
+      .digest('hex');
 
     const registro = await PasswordReset.findOne({
       where: {
@@ -88,9 +114,16 @@ exports.validar = async (req, res) => {
       }
     });
 
-    if (!registro) return res.status(400).json({ ok: false, msg: 'Token inválido o expirado.' });
+    if (!registro) {
+      return res.status(400).json({
+        ok: false,
+        msg: 'Token inválido o expirado.'
+      });
+    }
 
-    const usuario = await Usuario.findOne({ where: { id_usuario: registro.id_usuario } });
+    const usuario = await Usuario.findOne({
+      where: { id_usuario: registro.id_usuario }
+    });
 
     return res.json({
       ok: true,
@@ -98,25 +131,41 @@ exports.validar = async (req, res) => {
       purpose: registro.purpose,
       expiresAt: registro.expires_at
     });
+
   } catch (e) {
     console.error(e);
-    return res.status(500).json({ ok: false, msg: 'Error validando token.' });
+    return res.status(500).json({
+      ok: false,
+      msg: 'Error validando token.'
+    });
   }
 };
 
-// POST /api/password/cambiar   body: { token, newPassword }
+// POST /api/password/cambiar
 exports.cambiar = async (req, res) => {
   try {
     const { token, newPassword } = req.body;
 
     if (!token || !newPassword) {
-      return res.status(400).json({ ok: false, msg: 'Datos incompletos.' });
-    }
-    if (newPassword.length < 8) {
-      return res.status(400).json({ ok: false, msg: 'Password muy corto (min 8).' });
+      return res.status(400).json({
+        ok: false,
+        msg: 'Datos incompletos.'
+      });
     }
 
-    const token_hash = crypto.createHash('sha256').update(token).digest('hex');
+    try {
+      await passwordFuerte(newPassword);
+    } catch (error) {
+      return res.status(400).json({
+        ok: false,
+        msg: error.message
+      });
+    }
+
+    const token_hash = crypto
+      .createHash('sha256')
+      .update(token)
+      .digest('hex');
 
     const registro = await PasswordReset.findOne({
       where: {
@@ -126,23 +175,94 @@ exports.cambiar = async (req, res) => {
       }
     });
 
-    if (!registro) return res.status(400).json({ ok: false, msg: 'Token inválido o expirado.' });
+    if (!registro) {
+      return res.status(400).json({
+        ok: false,
+        msg: 'Token inválido o expirado.'
+      });
+    }
 
-    const usuario = await Usuario.findOne({ where: { id_usuario: registro.id_usuario, activo: true } });
-    if (!usuario) return res.status(400).json({ ok: false, msg: 'Usuario no válido.' });
+    const usuario = await Usuario.findOne({
+      where: {
+        id_usuario: registro.id_usuario,
+        activo: true
+      }
+    });
 
-    // Hash de la nueva contraseña
+    if (!usuario) {
+      return res.status(400).json({
+        ok: false,
+        msg: 'Usuario no válido.'
+      });
+    }
+
+    const config = await ConfiguracionSeguridad.findOne({
+      where: { activo: true }
+    });
+
+    if (!config) {
+      return res.status(500).json({
+        ok: false,
+        msg: 'No hay configuración de seguridad registrada.'
+      });
+    }
+
+    if (!config.permite_reutilizacion) {
+      const limiteHistorial = config.historial_passwords || 5;
+
+      const historial = await HistoricoPassword.findAll({
+        where: {
+          id_usuario: usuario.id_usuario
+        },
+        order: [['fecha_cambio', 'DESC']],
+        limit: limiteHistorial
+      });
+
+      const coincideConActual = usuario.password
+        ? bcrypt.compareSync(newPassword, usuario.password)
+        : false;
+
+      const coincideConHistorial = historial.some((item) =>
+        bcrypt.compareSync(newPassword, item.password_hash)
+      );
+
+      if (coincideConActual || coincideConHistorial) {
+        return res.status(400).json({
+          ok: false,
+          msg: `No puedes reutilizar una de tus últimas ${limiteHistorial} contraseñas.`
+        });
+      }
+    }
+
     const salt = bcrypt.genSaltSync();
     const passwordHasheada = bcrypt.hashSync(newPassword, salt);
 
-    await usuario.update({ password: passwordHasheada });
+    if (usuario.password) {
+      await HistoricoPassword.create({
+        id_usuario: usuario.id_usuario,
+        password_hash: usuario.password
+      });
+    }
 
-    // invalidar token
-    await registro.update({ used_at: new Date() });
+    await usuario.update({
+      password: passwordHasheada,
+      fecha_cambio_password: new Date()
+    });
 
-    return res.json({ ok: true, msg: 'Contraseña actualizada correctamente.' });
+    await registro.update({
+      used_at: new Date()
+    });
+
+    return res.json({
+      ok: true,
+      msg: 'Contraseña actualizada correctamente.'
+    });
+
   } catch (e) {
     console.error(e);
-    return res.status(500).json({ ok: false, msg: 'Error actualizando contraseña.' });
+    return res.status(500).json({
+      ok: false,
+      msg: 'Error actualizando contraseña.'
+    });
   }
 };

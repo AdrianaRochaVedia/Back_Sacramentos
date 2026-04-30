@@ -25,11 +25,13 @@ const Parroquia = sequelize.define('Parroquia', {
     type: DataTypes.STRING(100),
     allowNull: false,   
     unique: true
-    }
+    },
 
 }, {
   tableName: 'institucion_parroquia',
   timestamps: false
 });
+
+
 
 module.exports = Parroquia;

@@ -228,7 +228,8 @@ const actualizarPersona = async (req, res) => {
     nombre_padre,
     nombre_madre,
     estado,
-    activo
+    activo,
+    sacerdote
   } = req.body;
 
   try {
@@ -257,6 +258,7 @@ const actualizarPersona = async (req, res) => {
     if (nombre_madre !== undefined) updates.nombre_madre = nombre_madre;
     if (estado !== undefined) updates.estado = estado;
     if (activo !== undefined) updates.activo = activo;
+    if (sacerdote !== undefined) updates.sacerdote = sacerdote;
 
     if (Object.keys(updates).length === 0) {
       return res.status(400).json({ ok:false, msg:'No se enviaron campos a actualizar' });

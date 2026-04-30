@@ -72,12 +72,16 @@ const crearParroquia = async (req, res) => {
     if (existe) {
       return res.status(400).json({ ok: false, msg: 'La parroquia ya está registrada' });
     }
+    const existeEmail =  await Parroquia.findOne({ where: { email } });
+    if (existeEmail) {
+      return res.status(400).json({ ok: false, msg: 'El email ya está registrado' });
+    }
 
     const parroquia = await Parroquia.create({
       nombre,
       direccion,
       telefono,
-      email
+      email,
     });
     res.status(201).json({
       ok: true,
@@ -86,7 +90,7 @@ const crearParroquia = async (req, res) => {
         nombre: parroquia.nombre,
         direccion: parroquia.direccion,
         telefono: parroquia.telefono,
-        email: parroquia.email
+        email: parroquia.email,
       },
     });
   } catch (err) {
