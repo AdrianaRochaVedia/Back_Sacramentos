@@ -11,14 +11,15 @@ const {
   actualizarUsuario,
   eliminarUsuario,
   desbloquearUsuario,
-  verificarCodigo2FA
+  verificarCodigo2FA,
+  getMisAccesos
 } = require('../controllers/usuarios');
 const { validarJWT } = require('../middlewares/validar-jwt');
 const { passwordFuerte } = require('../helpers/validar-password');
 const { validarPermiso } = require('../middlewares/validarPermiso');
 
 const router = Router();
-
+router.get('/mis-accesos', validarJWT, getMisAccesos);
 router.post('/', [
     check('email', 'El email es obligatorio').isEmail(),
     check('password', 'La contraseña es obligatoria').notEmpty(),

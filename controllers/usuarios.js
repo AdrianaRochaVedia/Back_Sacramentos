@@ -7,6 +7,7 @@ const ConfiguracionSeguridad = require('../models/ConfiguracionSeguridad');
 const DominioPermitido = require('../models/DominioPermitido');
 const UsuarioParroquia = require('../models/UsuarioParroquia');
 const Parroquia = require('../models/Parroquia');
+const Permisos = require('../models/Permisos');
 const { generarJWT } = require('../helpers/jwt');
 const { combinarCondiciones } = require('../middlewares/busqueda');
 const { verifyTurnstileToken } = require('../helpers/turnstile');
@@ -400,9 +401,27 @@ const crearUsuario = async (req, res) => {
 
 //Login sin captcha
 const loginUsuario = async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password /*, turnstileToken */ } = req.body;
 
   try {
+    // ============================
+    // CAPTCHA (DESACTIVADO POR AHORA)
+    // ============================
+    /*
+    const captchaResult = await verifyTurnstileToken({
+      token: turnstileToken,
+      remoteip: req.ip
+    });
+
+    if (!captchaResult.ok) {
+      return res.status(400).json({
+        ok: false,
+        msg: captchaResult.msg,
+        errors: captchaResult.errors || []
+      });
+    }
+    */
+
     const usuario = await Usuario.findOne({
       where: { email, activo: true },
       include: [{
@@ -416,17 +435,26 @@ const loginUsuario = async (req, res) => {
       return res.status(400).json({ ok: false, msg: 'Usuario no existe' });
     }
 
+    // ============================
+    // BLOQUEO
+    // ============================
     const bloqueo = await verificarBloqueo(usuario);
     if (bloqueo.bloqueado) {
       return res.status(403).json({ ok: false, msg: bloqueo.msg });
     }
 
+    // ============================
+    // PASSWORD
+    // ============================
     const valid = bcrypt.compareSync(password, usuario.password);
     if (!valid) {
       const intento = await registrarIntentoFallido(usuario);
       return res.status(400).json({ ok: false, msg: intento.msg });
     }
 
+    // ============================
+    // EXPIRACIÓN
+    // ============================
     const expiracion = verificarExpiracion(usuario);
     if (expiracion.expirada) {
       return res.status(403).json({
@@ -436,12 +464,18 @@ const loginUsuario = async (req, res) => {
       });
     }
 
+    // ============================
+    // CONFIGURACIÓN 2FA
+    // ============================
     const config = await ConfiguracionSeguridad.findOne({
       where: { activo: true }
     });
 
     const usa2FA = config?.usa_2fa === true;
 
+    // ============================
+    // SI 2FA ESTÁ ACTIVO
+    // ============================
     if (usa2FA) {
       const codigo = generarCodigo2FA();
 
@@ -475,6 +509,9 @@ const loginUsuario = async (req, res) => {
       });
     }
 
+    // ============================
+    // LOGIN NORMAL
+    // ============================
     await resetearIntentos(usuario);
 
     const token = await generarJWT(usuario.id_usuario, usuario.email);
@@ -514,7 +551,7 @@ const verificarCodigo2FA = async (req, res) => {
       });
     }
 
-    if (data.codigo !== codigo) {
+    if (data.codigo !== codigo.trim()) {
       return res.status(400).json({
         ok: false,
         msg: 'Código incorrecto'
@@ -797,6 +834,107 @@ const desbloquearUsuario = async (req, res) => {
   }
 };
 
+const getMisAccesos = async (req, res) => {
+  try {
+    const idUsuario = req.uid;
+
+    const usuario = await Usuario.findByPk(idUsuario, {
+      include: [
+        {
+          model: Rol,
+          as: 'rol',
+          include: [
+            {
+              model: Permisos,
+              as: 'permisos',
+              attributes: ['id_permiso', 'nombre', 'descripcion'],
+              through: { attributes: [] }
+            }
+          ]
+        }
+      ]
+    });
+
+    if (!usuario) {
+      return res.status(404).json({
+        ok: false,
+        msg: 'Usuario no encontrado'
+      });
+    }
+
+    const permisos = usuario.rol?.permisos?.map(p => p.nombre) || [];
+
+    const MENU_BACKEND = [
+      {
+        permiso: 'VER_PERSONAS',
+        to: '/personas',
+        label: 'Personas',
+        icon: 'group'
+      },
+      {
+        permiso: 'VER_USUARIOS',
+        to: '/usuarios',
+        label: 'Usuarios',
+        icon: 'manage_accounts'
+      },
+      {
+        permiso: 'VER_AUDITORIA',
+        to: '/auditoria',
+        label: 'Auditoría',
+        icon: 'history'
+      },
+      {
+        permiso: 'VER_CONFIG_SEGURIDAD',
+        to: '/configuracion-seguridad',
+        label: 'Configuración de seguridad',
+        icon: 'shield'
+      },
+      {
+        permiso: 'VER_ROLES',
+        to: '/roles-permisos',
+        label: 'Roles y permisos',
+        icon: 'manage_accounts'
+      },
+      {
+        permiso: 'VER_SACRAMENTOS',
+        to: '/sacramentos',
+        label: 'Sacramentos',
+        icon: 'import_contacts'
+      },
+      {
+        permiso: 'VER_REPORTES_GLOBALES',
+        to: '/reportes',
+        label: 'Reportes',
+        icon: 'bar_chart'
+      },
+      {
+        permiso: 'VER_PARROQUIAS',
+        to: '/parroquias',
+        label: 'Parroquias',
+        icon: 'church'
+      }
+    ];
+
+    const menu = MENU_BACKEND.filter(item =>
+      permisos.includes(item.permiso)
+    );
+
+    return res.json({
+      ok: true,
+      rol: usuario.rol,
+      permisos,
+      menu
+    });
+
+  } catch (error) {
+    console.error('Error al obtener accesos:', error);
+    return res.status(500).json({
+      ok: false,
+      msg: 'Error al obtener accesos'
+    });
+  }
+};
+
   module.exports = {
     getUsuarios,
     crearUsuario,
@@ -807,5 +945,6 @@ const desbloquearUsuario = async (req, res) => {
     eliminarUsuario,
     getAllUsuarios,
     verificarCodigo2FA,
-    desbloquearUsuario
+    desbloquearUsuario,
+    getMisAccesos
   };
