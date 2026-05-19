@@ -17,9 +17,10 @@ app.set('trust proxy', true);
 
 app.use(cors({
   origin: [
-    'http://localhost:5173',
-    'https://fronttaller0.vercel.app'
-  ],
+  'http://localhost:5173',
+  'https://fronttaller0.vercel.app',
+  'http://sacra360.s3-website-us-east-1.amazonaws.com'
+],
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'x-token'],
   credentials: true,
@@ -60,14 +61,15 @@ app.use(helmet({
         'https:'
       ],
       connectSrc: [
-        "'self'",
-        'http://localhost:3000',
-        'http://localhost:5173',
-        'https://fronttaller0.vercel.app',
-        'https://back-sacramentos.onrender.com',
-        'https://*',
-        'http://*'
-      ],
+  "'self'",
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'https://fronttaller0.vercel.app',
+  'http://sacra360.s3-website-us-east-1.amazonaws.com',
+  'https://back-sacramentos.onrender.com',
+  'https://*',
+  'http://*'
+],
       objectSrc: ["'none'"],
       baseUri: ["'self'"],
       formAction: ["'self'"],
