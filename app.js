@@ -12,6 +12,7 @@ const app = express();
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const dominioPermitidoRoute = require('./routes/dominioPermitidoRoute');
 const usuarioParroquiaRoute = require('./routes/usuarioParroquia');
+const ocrRoutes = require('./routes/ocrRoute');
 
 app.set('trust proxy', true);
 
@@ -213,6 +214,7 @@ app.use('/api/permiso', require('./routes/permisoRoute'));
 app.use('/api/configuracion-seguridad', require('./routes/configuracionSeguridadRoute'));
 app.use('/api/dominio-permitido', dominioPermitidoRoute);
 app.use('/api/usuario-parroquia', usuarioParroquiaRoute);
+app.use('/api', ocrRoutes);
 app.get('/api/proxy-pdf', async (req, res) => {
   try {
     const url = req.query.url;
