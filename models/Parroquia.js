@@ -1,4 +1,3 @@
-// models/Usuario.js
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../database/config');
 
@@ -23,15 +22,12 @@ const Parroquia = sequelize.define('Parroquia', {
   },
   email: {
     type: DataTypes.STRING(100),
-    allowNull: false,   
+    allowNull: false,
     unique: true
-    },
-
+  }
 }, {
   tableName: 'institucion_parroquia',
   timestamps: false
 });
-
-
 
 module.exports = Parroquia;

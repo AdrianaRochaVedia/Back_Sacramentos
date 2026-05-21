@@ -1,5 +1,7 @@
 const { response } = require('express');
 const Parroquia = require('../models/Parroquia');
+const Usuario = require('../models/Usuario'); 
+const UsuarioParroquia = require('../models/UsuarioParroquia');
 const { combinarCondiciones } = require('../middlewares/busqueda');
 
 // Obtener todas las parroquias con búsqueda y filtros
@@ -35,25 +37,55 @@ const getParroquias = async (req, res = response) => {
 
         const { count, rows } = await Parroquia.findAndCountAll({
             where: whereConditions,
+            include: [
+              {
+                model: Usuario,
+                as: 'usuarios',
+                attributes: [
+                  'id_usuario',
+                  'nombre',
+                  'apellido_paterno',
+                  'apellido_materno',
+                  'email'
+                ],
+                through: {
+                  attributes: ['rol_en_parroquia', 'activo'],
+                  where: {
+                    rol_en_parroquia: 'PARROCO',
+                    activo: true
+                  }
+                },
+                required: false
+              }
+            ],
             offset,
             limit,
-            order: [['nombre', 'ASC']] 
-        });
+            order: [['nombre', 'ASC']]
+          });
 
-        res.json({
-            ok: true,
-            parroquias: rows,
-            totalItems: count,
-            totalPages: Math.ceil(count / limit),
-            currentPage: page,
-            filtros_aplicados: {
-                search,
-                nombre,
-                direccion,
-                telefono,
-                email
-            }
-        });
+       res.json({
+        ok: true,
+        parroquias: rows.map((p) => {
+          const plain = p.get({ plain: true });
+          const parroco = plain.usuarios?.[0] || null;
+
+          return {
+            ...plain,
+            parroco,
+            usuarios: undefined
+          };
+        }),
+        totalItems: count,
+        totalPages: Math.ceil(count / limit),
+        currentPage: page,
+        filtros_aplicados: {
+          search,
+          nombre,
+          direccion,
+          telefono,
+          email
+        }
+      });
     } catch (error) {
         console.error('Error en getParroquias:', error);
         res.status(500).json({
@@ -106,12 +138,44 @@ const getParroquia = async (req, res) => {
     const { id } = req.params;
     try {
       const parroquia = await Parroquia.findOne({
-        where: { id_parroquia: id }
-      });
+          where: { id_parroquia: id },
+          include: [
+            {
+              model: Usuario,
+              as: 'usuarios',
+              attributes: [
+                'id_usuario',
+                'nombre',
+                'apellido_paterno',
+                'apellido_materno',
+                'email'
+              ],
+              through: {
+                attributes: ['rol_en_parroquia', 'activo'],
+                where: {
+                  rol_en_parroquia: 'PARROCO',
+                  activo: true
+                }
+              },
+              required: false
+            }
+          ]
+        });
       if (!parroquia) {
         return res.status(404).json({ ok: false, msg: 'Parroquia no encontrada' });
       }
-      res.json({ ok: true, parroquia });
+
+      const plain = parroquia.get({ plain: true });
+      const parroco = plain.usuarios?.[0] || null;
+
+      res.json({
+        ok: true,
+        parroquia: {
+          ...plain,
+          parroco,
+          usuarios: undefined
+        }
+      });
     } catch (err) {
       console.error(err);
       res.status(500).json({ ok: false, msg: 'Error al obtener parroquia' });
