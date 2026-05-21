@@ -5,6 +5,7 @@ const Rol = require('../models/Rol');
 const UsuarioParroquia = require('../models/UsuarioParroquia');
 const { combinarCondiciones } = require('../middlewares/busqueda');
 
+
 // Obtener todas las parroquias con búsqueda y filtros
 const getParroquias = async (req, res = response) => {
     try {
