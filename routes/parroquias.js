@@ -16,6 +16,7 @@ router.post(
         check('direccion', 'La dirección es obligatoria').not().isEmpty(),
         check('telefono', 'El teléfono es obligatorio').not().isEmpty(),
         check('email', 'El email es obligatorio').isEmail(),
+        check('id_usuario', 'Un parroco asignado es obligatorio').not().isEmpty(), 
         validarCampos
     ],
     crearParroquia
