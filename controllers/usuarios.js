@@ -57,12 +57,12 @@ const getUsuarios = async (req, res) => {
     } = req.query;
 
     const camposBusqueda = [
-      'nombre',
-      'apellido_paterno',
-      'apellido_materno',
-      'email',
-      'fecha_nacimiento'
-    ];
+    'Usuario.nombre',
+    'Usuario.apellido_paterno',
+    'Usuario.apellido_materno',
+    'Usuario.email',
+    'Usuario.fecha_nacimiento'
+  ];
 
     const filtros = {
       nombre,

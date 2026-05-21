@@ -1,6 +1,7 @@
 const { response } = require('express');
 const Parroquia = require('../models/Parroquia');
 const Usuario = require('../models/Usuario'); 
+const Rol = require('../models/Rol');
 const UsuarioParroquia = require('../models/UsuarioParroquia');
 const { combinarCondiciones } = require('../middlewares/busqueda');
 
@@ -97,38 +98,113 @@ const getParroquias = async (req, res = response) => {
 };
 
 const crearParroquia = async (req, res) => {
-  const { nombre, direccion, telefono, email } = req.body;
+
+  const { nombre, direccion, telefono, email, id_usuario } = req.body;
 
   try {
+
     const existe = await Parroquia.findOne({ where: { nombre } });
+
     if (existe) {
+
       return res.status(400).json({ ok: false, msg: 'La parroquia ya está registrada' });
+
     }
-    const existeEmail =  await Parroquia.findOne({ where: { email } });
+
+    const existeEmail = await Parroquia.findOne({ where: { email } });
+
     if (existeEmail) {
+
       return res.status(400).json({ ok: false, msg: 'El email ya está registrado' });
+
+    }
+
+    if (id_usuario) {
+
+      const usuario = await Usuario.findOne({
+
+        where: { id_usuario, activo: true },
+
+        include: [
+
+          {
+
+            model: Rol,
+
+            as: 'rol',
+
+            attributes: ['nombre'],
+
+          },
+
+        ],
+
+      });
+
+      if (!usuario) {
+
+        return res.status(400).json({ ok: false, msg: 'El usuario párroco no existe' });
+
+      }
+
+      if (usuario.rol?.nombre !== 'PARROCO' && usuario.rol?.nombre !== 'parroco') {
+
+        return res.status(400).json({
+
+          ok: false,
+
+          msg: 'El usuario seleccionado no tiene rol de párroco',
+
+        });
+
+      }
+
     }
 
     const parroquia = await Parroquia.create({
+
       nombre,
+
       direccion,
+
       telefono,
+
       email,
+
     });
-    res.status(201).json({
-      ok: true,
-      parroquia: {
+
+    if (id_usuario) {
+
+      await UsuarioParroquia.create({
+
+        id_usuario,
+
         id_parroquia: parroquia.id_parroquia,
-        nombre: parroquia.nombre,
-        direccion: parroquia.direccion,
-        telefono: parroquia.telefono,
-        email: parroquia.email,
-      },
+
+        rol_en_parroquia: 'PARROCO',
+
+        activo: true,
+
+      });
+
+    }
+
+    return res.status(201).json({
+
+      ok: true,
+
+      parroquia,
+
     });
+
   } catch (err) {
+
     console.error(err);
-    res.status(500).json({ ok: false, msg: 'Hable con el administrador' });
+
+    return res.status(500).json({ ok: false, msg: 'Hable con el administrador' });
+
   }
+
 };
 
 
@@ -184,37 +260,64 @@ const getParroquia = async (req, res) => {
 
 //Funcion para editar a la persona
 const actualizarParroquia = async (req, res = response) => {
-    const { id } = req.params;
-    const { nombre, direccion, telefono, email } = req.body;
+  const { id } = req.params;
+  const { nombre, direccion, telefono, email, id_usuario } = req.body;
 
-    try {
-        const parroquia = await Parroquia.findOne({
-            where: { id_parroquia: id }
-        });
+  try {
+    const parroquia = await Parroquia.findOne({
+      where: { id_parroquia: id }
+    });
 
-        if (!parroquia) {
-            return res.status(404).json({
-                ok: false,
-                msg: 'Parroquia no encontrada'
-            });
-        }
-        
-        const updates = {};
-        if (nombre !== undefined) updates.nombre = nombre;
-        if (direccion !== undefined) updates.direccion = direccion;
-        if (telefono !== undefined) updates.telefono = telefono;
-        if (email !== undefined) updates.email = email;
-
-        await parroquia.update(updates);
-        return res.json({
-            ok: true,
-            parroquia: parroquia.get({ plain: true })
-        });
-
-    } catch (e) {
-      console.error('Error al actualizar la parroquia:', e);
-      res.status(500).json({ ok:false, msg:'Error al actualizar la parroquia' });
+    if (!parroquia) {
+      return res.status(404).json({
+        ok: false,
+        msg: 'Parroquia no encontrada'
+      });
     }
+
+    const updates = {};
+    if (nombre !== undefined) updates.nombre = nombre;
+    if (direccion !== undefined) updates.direccion = direccion;
+    if (telefono !== undefined) updates.telefono = telefono;
+    if (email !== undefined) updates.email = email;
+
+    await parroquia.update(updates);
+
+    if (id_usuario !== undefined && id_usuario !== null) {
+      await UsuarioParroquia.update(
+        {
+          activo: false,
+          fecha_fin: new Date(),
+        },
+        {
+          where: {
+            id_parroquia: id,
+            rol_en_parroquia: 'PARROCO',
+            activo: true,
+          },
+        }
+      );
+
+      await UsuarioParroquia.create({
+        id_usuario,
+        id_parroquia: Number(id),
+        rol_en_parroquia: 'PARROCO',
+        activo: true,
+      });
+    }
+
+    return res.json({
+      ok: true,
+      parroquia: parroquia.get({ plain: true })
+    });
+
+  } catch (e) {
+    console.error('Error al actualizar la parroquia:', e);
+    return res.status(500).json({
+      ok: false,
+      msg: 'Error al actualizar la parroquia'
+    });
+  }
 };
 
 
