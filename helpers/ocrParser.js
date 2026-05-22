@@ -140,8 +140,13 @@ const parsers = {
     }
   }
 
-  const lugarMatch = textoFlat.match(/tuvo lugar en\s+(.+?)(?=\.|Actuaron|,)/i);
-  if (lugarMatch) datos.lugar_ceremonia = lugarMatch[1].trim();
+   const lugarMatch = textoFlat.match(
+    /En la ciudad de\s+(.+?),\s*Rep[úu]blica/i
+    );
+
+    if (lugarMatch) {
+    datos.lugar_ceremonia = lugarMatch[1].trim();
+    }
 
   const regCivilMatch = textoFlat.match(
     /Registro Civil\s*N[°º]\s*([A-Za-z0-9\/\-]+)/i

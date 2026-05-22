@@ -366,11 +366,11 @@ const confirmarOCR = async (req, res = response) => {
 
   const nombresNovios = [
     {
-      rol_sacramento_id: 4,
+      rol_sacramento_id: 2,
       nombre_completo: novio_1?.nombre_completo
     },
     {
-      rol_sacramento_id: 5,
+      rol_sacramento_id: 3,
       nombre_completo: novio_2?.nombre_completo
     }
   ];
@@ -434,6 +434,26 @@ const confirmarOCR = async (req, res = response) => {
     personasMatrimonio[0].persona_id;
 }
 
+    //Para no registrar doble vez
+    const sacramentoDuplicado = await Sacramento.findOne({
+    where: {
+        fecha_sacramento,
+        foja,
+        numero,
+        tipo_sacramento_id_tipo: tipoSacramento,
+        institucion_parroquia_id_parroquia: historico.institucion_parroquia_id,
+        activo: true
+    }
+    });
+
+    if (sacramentoDuplicado) {
+    await t.rollback();
+    return res.status(400).json({
+        ok: false,
+        msg: 'Este sacramento ya fue registrado anteriormente'
+    });
+    }
+
     const nuevoSacramento = await Sacramento.create({
       fecha_sacramento,
       foja,
@@ -445,6 +465,19 @@ const confirmarOCR = async (req, res = response) => {
       fecha_registro: new Date(),
       fecha_actualizacion: new Date()
     }, { transaction: t });
+
+    if (tipoSacramento === 3) {
+        const datosMatrimonio = historico.datos_extraidos || {};
+
+        await MatrimonioDetalle.create({
+            sacramento_id_sacramento: nuevoSacramento.id_sacramento,
+            reg_civil: datosMatrimonio.reg_civil || 'PENDIENTE',
+            lugar_ceremonia: datosMatrimonio.lugar_ceremonia || 'PENDIENTE',
+            numero_acta: datosMatrimonio.numero_acta
+            ? parseInt(datosMatrimonio.numero_acta)
+            : 0
+        }, { transaction: t });
+    }
 
     if (tipoSacramento === 3) {
       for (const persona of personasMatrimonio) {
