@@ -291,10 +291,10 @@ const crearSacramentoCompleto = async (req, res) => {
 
     console.error('Error al crear sacramento completo:', error);
 
-    return res.status(500).json({
-      ok: false,
-      msg: error.message || 'Error al crear sacramento',
-    });
+    return res.status(400).json({
+    ok: false,
+    msg: error.message || 'Error al crear sacramento',
+  });
   }
 };
 // para buscar sacramento por la persona que lo recibió

@@ -20,7 +20,6 @@ const verificarExpiracion = require('../helpers/seguridad/verificarExpiracion');
 const { generarCodigo2FA } = require('../helpers/twoFactorCode');
 const { generarToken2FA, verificarToken2FA } = require('../helpers/twoFactorToken');
 const { sendMail } = require('../helpers/mailer');
-const { sincronizarUsuarioParroquias } = require('../helpers/SincronizacionParroquias');
 const {
   twoFactorEmail,
   cuentaDesbloqueadaEmail
@@ -259,7 +258,7 @@ const crearUsuario = async (req, res) => {
     }
 
     // ── Validación de formato nombre.apellido@dominio ─────────────
-    const formatoValido = validarFormatoEmail({ email, nombre, apellido_paterno, apellido_materno });
+    const formatoValido = validarFormatoCorreo({ email, nombre, apellido_paterno, apellido_materno });
     if (!formatoValido.ok) {
       return res.status(400).json({ ok: false, msg: formatoValido.msg });
     }
