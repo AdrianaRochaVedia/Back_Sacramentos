@@ -9,7 +9,10 @@ const RolSacramento = require('../models/RolSacramento');
 const { Op } = require('sequelize');
 const { combinarCondiciones } = require('../middlewares/busqueda');
 const MatrimonioDetalle = require('../models/MatrimonioDetalle');
-
+const {
+  crearSacramentoCompletoService,
+  actualizarSacramentoCompletoService,
+} = require('../services/sacramento.service');
 
 // Obtener todos los sacramentos activos
 const getSacramentos = async (req, res = response) => {
@@ -258,80 +261,40 @@ const eliminarSacramento = async (req, res = response) => {
 // endpoint para crear sacramento y todas sus relaciones
 const crearSacramentoCompleto = async (req, res) => {
   const t = await Sacramento.sequelize.transaction();
+
   try {
-    const {
-      fecha_sacramento,
-      foja,
-      numero,
-      tipo_sacramento_id_tipo,
-      parroquiaId,
-      relaciones,
-      matrimonioDetalle
-    } = req.body;
+    const usuario_id_usuario = req.uid;
 
-    // usuario autenticado
-    const usuario_id_usuario = req.uid; // VIENE DEL JWT
-
-    if (!req.uid) {
-      return res.status(400).json({ ok: false, msg: "Usuario no autenticado" });
+    if (!usuario_id_usuario) {
+      await t.rollback();
+      return res.status(401).json({
+        ok: false,
+        msg: 'Usuario no autenticado',
+      });
     }
 
-    if (!relaciones || !Array.isArray(relaciones)) {
-      return res.status(400).json({ ok: false, msg: "Formato inválido en relaciones" });
-    }
-
-    //  Crear sacramento
-    const nuevo = await Sacramento.create({
-      fecha_sacramento,
-      foja,
-      numero,
-      tipo_sacramento_id_tipo,
-      institucion_parroquia_id_parroquia: parroquiaId,
-      usuario_id_usuario,               // del jwt
-      activo: true,
-      fecha_registro: new Date(),       // opcional, igual se llena solo
-      fecha_actualizacion: new Date()   //
-    }, { transaction: t });
-
-    const id_sacramento = nuevo.id_sacramento;
-
-    // 💍 Crear MatrimonioDetalle si el sacramento es Matrimonio
-    if (Number(tipo_sacramento_id_tipo) === 2) {
-      console.log("💍 Creando MatrimonioDetalle para sacramento:", id_sacramento);
-
-      if (!matrimonioDetalle || typeof matrimonioDetalle !== "object") {
-        throw new Error("Datos de matrimonioDetalle no enviados o inválidos");
-      }
-
-      await MatrimonioDetalle.create({
-        sacramento_id_sacramento: id_sacramento,
-        ...matrimonioDetalle
-      }, { transaction: t });
-
-      console.log("✅ MatrimonioDetalle creado correctamente");
-    }
-
-    // Crear relaciones en persona_sacramento
-    for (const rel of relaciones) {
-      await PersonaSacramento.create({
-        persona_id_persona: rel.persona_id,
-        rol_sacramento_id_rol_sacra: rel.rol_sacramento_id,
-        sacramento_id_sacramento: id_sacramento
-      }, { transaction: t });
-    }
+    const sacramento = await crearSacramentoCompletoService({
+      data: req.body,
+      usuario_id_usuario,
+      transaction: t,
+    });
 
     await t.commit();
 
     return res.status(201).json({
       ok: true,
-      msg: "Sacramento creado correctamente",
-      sacramento: nuevo
+      msg: 'Sacramento creado correctamente',
+      sacramento,
     });
-
   } catch (error) {
     await t.rollback();
-    console.error("Error al crear sacramento completo:", error);
-    return res.status(500).json({ ok: false, msg: "Error al crear sacramento" });
+
+    console.error('Error al crear sacramento completo:', error);
+
+    return res.status(500).json({
+      ok: false,
+      msg: error.message || 'Error al crear sacramento',
+    });
   }
 };
 // para buscar sacramento por la persona que lo recibió
@@ -339,10 +302,10 @@ const crearSacramentoCompleto = async (req, res) => {
 const buscarSacramentosPorPersona = async (req, res) => {
   // Roles permitidos para mostrar sacramentos donde la persona participó
   const ROLES_VISIBLES = [
-    1, 4, 10, 21,    // roles principales (bautizado, confirmado, principal)
-    2, 3, 11, 12, 15, 16, // matrimonio (esposo/esposa/novio/novia)
-    5, 6,            // padrinos
-    8, 9, 14, 17     // ministros / sacerdotes / celebrantes
+    1, 4, 8,    // roles principales (bautizado, confirmado, principal)
+    2, 3, // matrimonio (esposo/esposa/novio/novia)
+    5,            // padrinos
+    7   // ministros / sacerdotes / celebrantes
   ];
   try {
     const {
@@ -424,18 +387,7 @@ const buscarSacramentosPorPersona = async (req, res) => {
 
     // 🔴 EXCLUSIÓN OBLIGATORIA:
     // No mostrar sacramentos donde UNA DE LAS PERSONAS encontradas es también el usuario que registró el sacramento.
-    const filtrados = rows.filter(s => {
-      const personasRelacionadas = s.personaSacramentos.map(p => p.persona);
-
-      if (!personasRelacionadas.length) return false;
-
-      // Excluir sacramentos donde UNA DE LAS PERSONAS buscadas sea el mismo usuario que registró
-      const coincideConUsuario = personasRelacionadas.some(
-        p => p.id_persona === s.usuario_id_usuario
-      );
-
-      return !coincideConUsuario;
-    });
+    const filtrados = rows;
 
     //  Obtener todas las relaciones completas (padrinos, ministros, etc.) y MatrimonioDetalle si aplica
     for (const s of filtrados) {
@@ -727,156 +679,39 @@ const actualizarSacramentoCompleto = async (req, res) => {
   const t = await Sacramento.sequelize.transaction();
 
   try {
+    const usuario_id_usuario = req.uid;
     const id_sacramento = req.params.id;
 
-    // 1️⃣ Extraer todos los datos del body, incluyendo matrimonioDetalle
-    let {
-      fecha_sacramento,
-      foja,
-      numero,
-      tipo_sacramento_id_tipo,
-      parroquiaId,
-      relaciones,
-      matrimonioDetalle
-    } = req.body;
-
-    // Asegurar que relaciones sea array real
-    if (typeof relaciones === "string") {
-      try {
-        relaciones = JSON.parse(relaciones);
-      } catch (err) {
-        return res.status(400).json({ ok: false, msg: "Relaciones mal formateadas" });
-      }
-    }
-
-    if (!relaciones || !Array.isArray(relaciones)) {
-      return res.status(400).json({ ok: false, msg: "Formato inválido en relaciones" });
-    }
-
-    const usuario_id_usuario = req.uid; // del JWT
-
-    console.log("BODY RAW :", req.body);
-    console.log("TIPO DE RELACIONES:", typeof req.body.relaciones);
-
     if (!usuario_id_usuario) {
-      return res.status(400).json({ ok: false, msg: "Usuario no autenticado" });
-    }
-
-    // 1️⃣ Verificar si el sacramento existe
-    const sacramento = await Sacramento.findOne({
-      where: { id_sacramento, activo: true }
-    });
-
-    if (!sacramento) {
-      return res
-        .status(404)
-        .json({ ok: false, msg: "Sacramento no encontrado" });
-    }
-
-    // Actualizar datos principales del sacramento
-    await Sacramento.update(
-      {
-        fecha_sacramento,
-        foja,
-        numero,
-        tipo_sacramento_id_tipo,
-        institucion_parroquia_id_parroquia: parroquiaId,
-        usuario_id_usuario,
-        fecha_actualizacion: new Date()
-      },
-      { where: { id_sacramento }, transaction: t }
-    );
-
-    // 💍 Actualizar / crear MatrimonioDetalle si es Matrimonio
-    if (Number(tipo_sacramento_id_tipo) === 2) {
-      console.log("💍 Actualizando MatrimonioDetalle para sacramento:", id_sacramento);
-
-      if (!matrimonioDetalle || typeof matrimonioDetalle !== "object") {
-        throw new Error("Datos de matrimonioDetalle no enviados o inválidos");
-      }
-
-      const existente = await MatrimonioDetalle.findOne({
-        where: { sacramento_id_sacramento: id_sacramento },
-        transaction: t
+      await t.rollback();
+      return res.status(401).json({
+        ok: false,
+        msg: 'Usuario no autenticado',
       });
-
-      if (existente) {
-        await existente.update(
-          { ...matrimonioDetalle },
-          { transaction: t }
-        );
-        console.log("✅ MatrimonioDetalle actualizado");
-      } else {
-        await MatrimonioDetalle.create(
-          {
-            sacramento_id_sacramento: id_sacramento,
-            ...matrimonioDetalle
-          },
-          { transaction: t }
-        );
-        console.log("✅ MatrimonioDetalle creado");
-      }
     }
 
-    // 3️⃣ Obtener relaciones actuales
-    const relacionesActuales = await PersonaSacramento.findAll({
-      where: { sacramento_id_sacramento: id_sacramento },
-      transaction: t
+    await actualizarSacramentoCompletoService({
+      id_sacramento,
+      data: req.body,
+      usuario_id_usuario,
+      transaction: t,
     });
 
-    // Crear mapas para comparación (por rol + persona)
-    const mapActuales = new Map();
-    for (const r of relacionesActuales) {
-      const key = `${r.rol_sacramento_id_rol_sacra}-${r.persona_id_persona}`;
-      mapActuales.set(key, r);
-    }
-
-    const relacionesNuevas = new Set();
-    // 4️⃣ Procesar nuevas relaciones (crear o actualizar)
-    for (const rel of relaciones) {
-      const key = `${rel.rol_sacramento_id}-${rel.persona_id}`;
-      const existente = mapActuales.get(key);
-      relacionesNuevas.add(key);
-
-      if (existente) {
-        // Si existe, no hay nada que actualizar (ya está persona-rol)
-        // Si quieres actualizar algún otro campo, hazlo aquí
-      } else {
-        // Si no existe, crear la relación
-        await PersonaSacramento.create(
-          {
-            persona_id_persona: rel.persona_id,
-            rol_sacramento_id_rol_sacra: rel.rol_sacramento_id,
-            sacramento_id_sacramento: id_sacramento
-          },
-          { transaction: t }
-        );
-      }
-    }
-
-    // 5️⃣ Eliminar solo las relaciones que ya no deben existir
-    for (const r of relacionesActuales) {
-      const key = `${r.rol_sacramento_id_rol_sacra}-${r.persona_id_persona}`;
-      if (!relacionesNuevas.has(key)) {
-        await r.destroy({ transaction: t });
-      }
-    }
-
-    // 5️⃣ Confirmar transacción
     await t.commit();
 
     return res.json({
       ok: true,
-      msg: "Sacramento actualizado correctamente",
-      id_sacramento
+      msg: 'Sacramento actualizado correctamente',
+      id_sacramento,
     });
-
   } catch (error) {
     await t.rollback();
-    console.error("Error al actualizar sacramento completo:", error);
+
+    console.error('Error al actualizar sacramento completo:', error);
+
     return res.status(500).json({
       ok: false,
-      msg: "Error al actualizar el sacramento"
+      msg: error.message || 'Error al actualizar el sacramento',
     });
   }
 };

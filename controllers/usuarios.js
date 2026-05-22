@@ -1,3 +1,4 @@
+const { Op } = require('sequelize');
 const { response } = require('express');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto'); 
@@ -18,6 +19,7 @@ const verificarExpiracion = require('../helpers/seguridad/verificarExpiracion');
 const { generarCodigo2FA } = require('../helpers/twoFactorCode');
 const { generarToken2FA, verificarToken2FA } = require('../helpers/twoFactorToken');
 const { sendMail } = require('../helpers/mailer');
+const { sincronizarUsuarioParroquias } = require('../helpers/SincronizacionParroquias');
 const {
   twoFactorEmail,
   cuentaDesbloqueadaEmail
@@ -57,12 +59,12 @@ const getUsuarios = async (req, res) => {
     } = req.query;
 
     const camposBusqueda = [
-      'nombre',
-      'apellido_paterno',
-      'apellido_materno',
-      'email',
-      'fecha_nacimiento'
-    ];
+    'Usuario.nombre',
+    'Usuario.apellido_paterno',
+    'Usuario.apellido_materno',
+    'Usuario.email',
+    'Usuario.fecha_nacimiento'
+  ];
 
     const filtros = {
       nombre,
@@ -670,135 +672,227 @@ const revalidarToken = async (req, res) => {
 
 //Funcion para editar al usuario
 const actualizarUsuario = async (req, res = response) => {
-    const { id } = req.params;
-    const { nombre, apellido_paterno, apellido_materno, email, password, fecha_nacimiento, id_rol, id_parroquia } = req.body;
-    try {
-        const usuario = await Usuario.findOne({ where: { id_usuario: id, activo: true } });
-        if (!usuario) {
-            return res.status(404).json({ ok: false, msg: 'Usuario no encontrado' });
-        }
+  const { id } = req.params;
 
-        if (email && email !== usuario.email) {
-            const yaExiste = await Usuario.findOne({ where: { email } });
-            if (yaExiste) return res.status(400).json({ ok: false, msg: 'El email ya está en uso' });
-        }
+  const {
+    nombre,
+    apellido_paterno,
+    apellido_materno,
+    email,
+    password,
+    fecha_nacimiento,
+    id_rol,
+    id_parroquia,
+    id_parroquias,
+    activo
+  } = req.body;
 
-        if (id_rol !== undefined && id_rol !== null) {
-            const rolExiste = await Rol.findByPk(id_rol);
-            if (!rolExiste) {
-                return res.status(400).json({ ok: false, msg: 'El rol especificado no existe' });
+  try {
+    const usuario = await Usuario.findOne({
+      where: { id_usuario: id, activo: true }
+    });
+
+    if (!usuario) {
+      return res.status(404).json({
+        ok: false,
+        msg: 'Usuario no encontrado'
+      });
+    }
+
+    if (email && email !== usuario.email) {
+      const yaExiste = await Usuario.findOne({ where: { email } });
+
+      if (yaExiste) {
+        return res.status(400).json({
+          ok: false,
+          msg: 'El email ya está en uso'
+        });
+      }
+    }
+
+    let rolActual = null;
+
+    if (id_rol !== undefined && id_rol !== null && id_rol !== '') {
+      rolActual = await Rol.findByPk(id_rol);
+
+      if (!rolActual) {
+        return res.status(400).json({
+          ok: false,
+          msg: 'El rol especificado no existe'
+        });
+      }
+    } else {
+      rolActual = await Rol.findByPk(usuario.id_rol);
+    }
+
+    const parroquiasRecibidas = Array.isArray(id_parroquias)
+      ? id_parroquias
+      : id_parroquia !== undefined && id_parroquia !== null && id_parroquia !== ''
+        ? [id_parroquia]
+        : id_parroquia === null || id_parroquia === ''
+          ? []
+          : undefined;
+
+    if (Array.isArray(parroquiasRecibidas)) {
+      const ids = parroquiasRecibidas.map(Number).filter(Boolean);
+
+      if (ids.length > 0) {
+        const totalParroquias = await Parroquia.count({
+          where: {
+            id_parroquia: {
+              [Op.in]: ids
             }
-        }
-          if (id_parroquia !== undefined) { 
-            if (id_parroquia !== null && id_parroquia !== '') {
-              const parroquiaExiste = await Parroquia.findByPk(id_parroquia);
-              if (!parroquiaExiste) {
-                  return res.status(400).json({ ok: false, msg: 'La parroquia especificada no existe' });
-              }
-            } 
           }
-
-
-        const updates = {};
-        if (nombre !== undefined) updates.nombre = nombre;
-        if (apellido_paterno !== undefined) updates.apellido_paterno = apellido_paterno;
-        if (apellido_materno !== undefined) updates.apellido_materno = apellido_materno;
-        if (email !== undefined) updates.email = email;
-        if (fecha_nacimiento !== undefined) updates.fecha_nacimiento = fecha_nacimiento;
-        if (id_rol !== undefined) updates.id_rol = id_rol;
-
-        if (password) {
-            try {
-                await passwordFuerte(password);
-            } catch (err) {
-                return res.status(400).json({ ok: false, msg: err.message });
-            }
-
-            // Verifica historial para que no se repita
-            const historial = await verificarHistorial(usuario.id_usuario, password);
-            if (!historial.ok) {
-                return res.status(400).json({ ok: false, msg: historial.msg });
-            }
-            const salt = bcrypt.genSaltSync();
-            const passwordHasheada = bcrypt.hashSync(password, salt);
-
-            const config = await ConfiguracionSeguridad.findOne({ where: { activo: true } });
-            if (!config) {
-                return res.status(500).json({ ok: false, msg: 'No hay configuración de seguridad registrada' });
-            }
-            const fecha_expiracion = new Date();
-            fecha_expiracion.setDate(fecha_expiracion.getDate() + config.vida_util_password_dias);
-
-            updates.password = passwordHasheada;
-            updates.fecha_ultimo_cambio_password = new Date();
-            updates.fecha_expiracion_password = fecha_expiracion;
-
-            await guardarEnHistorial(usuario.id_usuario, passwordHasheada);
-        }
-
-        await usuario.update(updates);
-
-        //para la parroquia
-        if (id_parroquia !== undefined) {
-          if (id_parroquia !== null && id_parroquia !== '') {
-            const parroquiaExiste = await Parroquia.findByPk(id_parroquia);
-
-            if (!parroquiaExiste) {
-              return res.status(400).json({
-                ok: false,
-                msg: 'La parroquia especificada no existe'
-              });
-            }
-
-            const rolActual = id_rol
-              ? await Rol.findByPk(id_rol)
-              : await Rol.findByPk(usuario.id_rol);
-
-            await UsuarioParroquia.update(
-              {
-                activo: false,
-                fecha_fin: new Date()
-              },
-              {
-                where: {
-                  id_usuario: usuario.id_usuario,
-                  activo: true
-                }
-              }
-            );
-
-            await UsuarioParroquia.create({
-              id_usuario: usuario.id_usuario,
-              id_parroquia: Number(id_parroquia),
-              rol_en_parroquia: rolActual?.nombre || 'SIN_ROL',
-              activo: true
-            });
-          } else {
-            await UsuarioParroquia.update(
-              {
-                activo: false,
-                fecha_fin: new Date()
-              },
-              {
-                where: {
-                  id_usuario: usuario.id_usuario,
-                  activo: true
-                }
-              }
-            );
-          }
-        }
-        const usuarioActualizado = await Usuario.findByPk(id, {
-            include: [{ model: Rol, as: 'rol', attributes: ['id_rol', 'nombre'] }]
         });
 
-        const { password: _, ...usuarioPlano } = usuarioActualizado.get({ plain: true });
-        res.json({ ok: true, usuario: usuarioPlano });
-
-    } catch (e) {
-        console.error('Error al actualizar el usuario:', e);
-        res.status(500).json({ ok: false, msg: 'Error al actualizar el usuario' });
+        if (totalParroquias !== ids.length) {
+          return res.status(400).json({
+            ok: false,
+            msg: 'Una o más parroquias especificadas no existen'
+          });
+        }
+      }
     }
+
+    const updates = {};
+
+    if (nombre !== undefined) updates.nombre = nombre;
+    if (apellido_paterno !== undefined) updates.apellido_paterno = apellido_paterno;
+    if (apellido_materno !== undefined) updates.apellido_materno = apellido_materno;
+    if (email !== undefined) updates.email = email;
+    if (fecha_nacimiento !== undefined) updates.fecha_nacimiento = fecha_nacimiento;
+    if (id_rol !== undefined) updates.id_rol = id_rol;
+    if (activo !== undefined) updates.activo = activo;
+
+    if (password) {
+      try {
+        await passwordFuerte(password);
+      } catch (err) {
+        return res.status(400).json({
+          ok: false,
+          msg: err.message
+        });
+      }
+
+      const historial = await verificarHistorial(usuario.id_usuario, password);
+
+      if (!historial.ok) {
+        return res.status(400).json({
+          ok: false,
+          msg: historial.msg
+        });
+      }
+
+      const salt = bcrypt.genSaltSync();
+      const passwordHasheada = bcrypt.hashSync(password, salt);
+
+      const config = await ConfiguracionSeguridad.findOne({
+        where: { activo: true }
+      });
+
+      if (!config) {
+        return res.status(500).json({
+          ok: false,
+          msg: 'No hay configuración de seguridad registrada'
+        });
+      }
+
+      const fecha_expiracion = new Date();
+      fecha_expiracion.setDate(
+        fecha_expiracion.getDate() + config.vida_util_password_dias
+      );
+
+      updates.password = passwordHasheada;
+      updates.fecha_ultimo_cambio_password = new Date();
+      updates.fecha_expiracion_password = fecha_expiracion;
+
+      await guardarEnHistorial(usuario.id_usuario, passwordHasheada);
+    }
+
+    await usuario.update(updates);
+
+    if (Array.isArray(parroquiasRecibidas)) {
+      const idsNuevos = parroquiasRecibidas.map(Number).filter(Boolean);
+
+      await UsuarioParroquia.update(
+        {
+          activo: false,
+          fecha_fin: new Date()
+        },
+        {
+          where: {
+            id_usuario: usuario.id_usuario,
+            activo: true,
+            id_parroquia: idsNuevos.length
+              ? { [Op.notIn]: idsNuevos }
+              : { [Op.ne]: null }
+          }
+        }
+      );
+
+      for (const idParroquia of idsNuevos) {
+        const relacion = await UsuarioParroquia.findOne({
+          where: {
+            id_usuario: usuario.id_usuario,
+            id_parroquia: idParroquia
+          }
+        });
+
+        if (relacion) {
+          await relacion.update({
+            rol_en_parroquia: rolActual?.nombre || 'SIN_ROL',
+            activo: true,
+            fecha_fin: null
+          });
+        } else {
+          await UsuarioParroquia.create({
+            id_usuario: usuario.id_usuario,
+            id_parroquia: idParroquia,
+            rol_en_parroquia: rolActual?.nombre || 'SIN_ROL',
+            activo: true
+          });
+        }
+      }
+    }
+
+    const usuarioActualizado = await Usuario.findByPk(id, {
+      attributes: {
+        exclude: ['password', 'password_hash']
+      },
+      include: [
+        {
+          model: Rol,
+          as: 'rol',
+          attributes: ['id_rol', 'nombre']
+        },
+        {
+          model: Parroquia,
+          as: 'parroquias',
+          attributes: ['id_parroquia', 'nombre', 'direccion'],
+          through: {
+            attributes: ['rol_en_parroquia', 'activo'],
+            where: {
+              activo: true
+            }
+          },
+          required: false
+        }
+      ]
+    });
+
+    return res.json({
+      ok: true,
+      usuario: usuarioActualizado
+    });
+
+  } catch (e) {
+    console.error('Error al actualizar el usuario:', e);
+
+    return res.status(500).json({
+      ok: false,
+      msg: 'Error al actualizar el usuario'
+    });
+  }
 };
 
 

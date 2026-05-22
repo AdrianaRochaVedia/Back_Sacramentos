@@ -51,10 +51,6 @@ const Persona = sequelize.define('Persona', {
     type: DataTypes.STRING(100),
     allowNull: false
   },
-  sacerdote: {
-    type: DataTypes.BOOLEAN,
-    allowNull: true
-  },
 
 }, {
   tableName: 'persona',
