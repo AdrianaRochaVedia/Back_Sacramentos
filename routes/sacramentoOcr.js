@@ -29,10 +29,10 @@ router.post(
     validarPermiso('CREAR_SACRAMENTO'),
     [
         check('historico_id', 'El historico_id es obligatorio').isInt(),
-        check('fecha_sacramento', 'La fecha del sacramento es obligatoria').isDate(),
+        check('fecha_sacramento', 'La fecha del sacramento es obligatoria').notEmpty(),
         check('foja', 'La foja es obligatoria').not().isEmpty(),
         check('numero', 'El número es obligatorio').isInt(),
-        check('relaciones', 'Las relaciones son obligatorias').isArray({ min: 1 }),
+        check('relaciones').optional().isArray().withMessage('relaciones debe ser un array'),
         validarCampos
     ],
     confirmarOCR

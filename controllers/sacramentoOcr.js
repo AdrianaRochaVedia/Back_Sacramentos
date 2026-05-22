@@ -99,11 +99,28 @@ const procesarOCR = async (req, res = response) => {
     }
 
     if (!parroquiaId) {
-      fs.unlinkSync(req.file.path);
-      return res.status(400).json({
+    const historico = await SacramentoOcrHistorico.create({
+        datos_extraidos: datosDetectados,
+        s3_key: key,
+        estado: 'esperando_parroquia',
+        usuario_id,
+        institucion_parroquia_id: null,
+        tipo_sacramento_id: parseInt(tipo_sacramento_id),
+        fecha_registro: new Date(),
+        fecha_actualizacion: new Date()
+    });
+
+    fs.unlinkSync(req.file.path);
+
+    return res.status(200).json({
         ok: false,
-        msg: 'No se pudo detectar la parroquia en el documento y no se proporcionó institucion_parroquia_id'
-      });
+        requiere_confirmacion_parroquia: true,
+        msg: 'No se pudo identificar la parroquia con certeza. Por favor selecciona o confirma.',
+        historico_id: historico.id,
+        parroquia_detectada: datosDetectados.parroquia || null,
+        datos_ocr: datosDetectados,
+        tipo_sacramento_id: parseInt(tipo_sacramento_id)
+    });
     }
 
     // Guardar en histórico
@@ -147,22 +164,32 @@ const procesarOCR = async (req, res = response) => {
 
 // Funcion para validar reglas de negocio y crea el sacramento real desde el histórico
 const confirmarOCR = async (req, res = response) => {
+
   const t = await Sacramento.sequelize.transaction();
+
   try {
+
     const {
-      historico_id,         
-      fecha_sacramento,     
+      historico_id,
+      fecha_sacramento,
       foja,
       numero,
-      relaciones           
+      relaciones,
+      nueva_persona
     } = req.body;
 
     const usuario_id = req.uid;
 
-    // Buscar el histórico pendiente
+    console.log("BODY:", req.body);
+
     const historico = await SacramentoOcrHistorico.findOne({
-      where: { id: historico_id, estado: 'pendiente' }
+      where: {
+        id: historico_id,
+        estado: 'pendiente'
+      }
     });
+
+    console.log("HISTORICO:", historico?.toJSON());
 
     if (!historico) {
       return res.status(404).json({
@@ -171,129 +198,386 @@ const confirmarOCR = async (req, res = response) => {
       });
     }
 
-    if (relaciones && Array.isArray(relaciones)) {
-      const personaPrincipal = relaciones.find(r => r.rol_sacramento_id === 4); 
-      if (personaPrincipal) {
-        const persona_id = personaPrincipal.persona_id;
+    let personaPrincipalId = null;
+    let personaCreada = false;
 
-        // Confirmación requiere bautismo previo
-        if (historico.tipo_sacramento_id === 2) {
-          const tieneBautismo = await PersonaSacramento.findOne({
-            include: [{
-              model: Sacramento,
-              as: 'sacramento',
-              where: { tipo_sacramento_id_tipo: 1, activo: true }
-            }],
-            where: { persona_id_persona: persona_id }
+    // =========================================
+    // BAUTISMO
+    // =========================================
+
+    if (
+      historico.tipo_sacramento_id === 1 ||
+      historico.tipo_sacramento_id_tipo === 1
+    ) {
+
+      console.log("ENTRANDO A BAUTISMO");
+      console.log("NUEVA PERSONA:", nueva_persona);
+
+      const relPrincipal = relaciones?.find(
+        r => r.rol_sacramento_id === 4
+      );
+
+      // =====================================
+      // PERSONA EXISTENTE
+      // =====================================
+
+      if (relPrincipal?.persona_id) {
+
+        const existe = await Persona.findByPk(
+          relPrincipal.persona_id
+        );
+
+        if (!existe) {
+
+          await t.rollback();
+
+          return res.status(404).json({
+            ok: false,
+            msg: `No se encontró la persona con id ${relPrincipal.persona_id}`
+          });
+        }
+
+        personaPrincipalId = relPrincipal.persona_id;
+      }
+
+      // =====================================
+      // NUEVA PERSONA OCR
+      // =====================================
+
+      else if (nueva_persona) {
+
+        // ================================
+        // PROCESAR NOMBRE COMPLETO
+        // ================================
+
+        const nombreCompleto =
+          nueva_persona.nombre_completo ||
+          nueva_persona.nombre ||
+          '';
+
+        const partes =
+          nombreCompleto
+            .trim()
+            .split(/\s+/);
+
+        let nombre = '';
+        let apellido_paterno = '';
+        let apellido_materno = '';
+
+        if (partes.length >= 3) {
+
+          apellido_materno =
+            partes.pop();
+
+          apellido_paterno =
+            partes.pop();
+
+          nombre =
+            partes.join(' ');
+
+        } else {
+
+          nombre =
+            nombreCompleto;
+
+          apellido_paterno =
+            'PENDIENTE';
+
+          apellido_materno =
+            'PENDIENTE';
+        }
+
+        // ================================
+        // CI TEMPORAL ÚNICO
+        // ================================
+
+        const ciTemporal =
+          `OCR-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
+        // ================================
+        // BUSCAR SI YA EXISTE
+        // ================================
+
+        const wherePersona = {
+          nombre,
+          apellido_paterno,
+          apellido_materno
+        };
+
+        console.log("WHERE PERSONA:", wherePersona);
+
+        const personaExistente =
+          await Persona.findOne({
+            where: wherePersona
           });
 
-          if (!tieneBautismo) {
-            await t.rollback();
-            return res.status(400).json({
-              ok: false,
-              msg: 'La persona no tiene bautismo registrado, requerido para confirmación'
+        console.log(
+          "PERSONA EXISTENTE:",
+          personaExistente
+        );
+
+        // ================================
+        // YA EXISTE
+        // ================================
+
+        if (personaExistente) {
+
+          personaPrincipalId =
+            personaExistente.id_persona;
+
+          personaCreada = false;
+        }
+
+        // ================================
+        // CREAR NUEVA
+        // ================================
+
+        else {
+
+          const creada =
+            await Persona.create({
+
+              nombre,
+
+              apellido_paterno,
+
+              apellido_materno,
+
+              carnet_identidad:
+                nueva_persona.carnet_identidad ||
+                ciTemporal,
+
+              fecha_nacimiento:
+                nueva_persona.fecha_nacimiento ||
+                '1900-01-01',
+
+              lugar_nacimiento:
+                nueva_persona.lugar_nacimiento ||
+                'PENDIENTE',
+
+              nombre_padre:
+                nueva_persona.nombre_padre ||
+                'PENDIENTE',
+
+              nombre_madre:
+                nueva_persona.nombre_madre ||
+                'PENDIENTE',
+
+              activo: true,
+
+              estado:
+                'pendiente_actualizacion'
+
+            }, {
+              transaction: t
             });
-          }
+
+          console.log(
+            "PERSONA CREADA:",
+            creada
+          );
+
+          personaPrincipalId =
+            creada.id_persona;
+
+          personaCreada = true;
         }
 
-        // Matrimonio requiere bautismo Y confirmación previos
-        if (historico.tipo_sacramento_id === 3) {
-        const tieneBautismo = await PersonaSacramento.findOne({
-            include: [{
-            model: Sacramento,
-            as: 'sacramento',
-            where: { tipo_sacramento_id_tipo: 1, activo: true }
-            }],
-            where: { persona_id_persona: persona_id }
-        });
-
-        if (!tieneBautismo) {
-            await t.rollback();
-            return res.status(400).json({
-            ok: false,
-            msg: 'La persona no tiene bautismo registrado, requerido para matrimonio'
-            });
-        }
-
-        const tieneConfirmacion = await PersonaSacramento.findOne({
-            include: [{
-            model: Sacramento,
-            as: 'sacramento',
-            where: { tipo_sacramento_id_tipo: 2, activo: true } 
-            }],
-            where: { persona_id_persona: persona_id }
-        });
-
-        if (!tieneConfirmacion) {
-            await t.rollback();
-            return res.status(400).json({
-            ok: false,
-            msg: 'La persona no tiene confirmación registrada, requerida para matrimonio'
-            });
-        }
-        }
       }
+
+      // =====================================
+      // ERROR
+      // =====================================
+
+      else {
+
+        await t.rollback();
+
+        return res.status(400).json({
+          ok: false,
+          msg: 'Debe enviar persona_id o nueva_persona'
+        });
+      }
+
     }
 
-    // Crear el sacramento real
-    const nuevoSacramento = await Sacramento.create({
-      fecha_sacramento,
-      foja,
-      numero,
-      tipo_sacramento_id_tipo: historico.tipo_sacramento_id,
-      institucion_parroquia_id_parroquia: historico.institucion_parroquia_id,
-      usuario_id_usuario: usuario_id,
-      activo: true,
-      fecha_registro: new Date(),
-      fecha_actualizacion: new Date()
-    }, { transaction: t });
+    // =========================================
+    // OTROS SACRAMENTOS
+    // =========================================
+
+    else {
+
+      console.log("NO ES BAUTISMO");
+
+      const relPrincipal = relaciones?.find(
+        r => r.rol_sacramento_id === 4
+      );
+
+      if (!relPrincipal?.persona_id) {
+
+        await t.rollback();
+
+        return res.status(400).json({
+          ok: false,
+          msg: 'La persona debe estar registrada previamente'
+        });
+      }
+
+      const existe = await Persona.findByPk(
+        relPrincipal.persona_id
+      );
+
+      if (!existe) {
+
+        await t.rollback();
+
+        return res.status(404).json({
+          ok: false,
+          msg: `No se encontró la persona`
+        });
+      }
+
+      personaPrincipalId =
+        relPrincipal.persona_id;
+    }
+
+    // =========================================
+    // CREAR SACRAMENTO
+    // =========================================
+
+    const nuevoSacramento =
+      await Sacramento.create({
+
+        fecha_sacramento,
+        foja,
+        numero,
+
+        tipo_sacramento_id_tipo:
+          historico.tipo_sacramento_id ||
+          historico.tipo_sacramento_id_tipo,
+
+        institucion_parroquia_id_parroquia:
+          historico.institucion_parroquia_id,
+
+        usuario_id_usuario:
+          usuario_id,
+
+        activo: true,
+
+        fecha_registro: new Date(),
+
+        fecha_actualizacion: new Date()
+
+      }, {
+        transaction: t
+      });
+
+    // =========================================
+    // RELACION PERSONA SACRAMENTO
+    // =========================================
+
+    await PersonaSacramento.create({
+
+      persona_id_persona:
+        personaPrincipalId,
+
+      rol_sacramento_id_rol_sacra: 4,
+
+      sacramento_id_sacramento:
+        nuevoSacramento.id_sacramento
+
+    }, {
+      transaction: t
+    });
+
+    // =========================================
+    // OTRAS RELACIONES
+    // =========================================
 
     if (relaciones && Array.isArray(relaciones)) {
-      for (const rel of relaciones) {
+
+      for (const rel of relaciones.filter(
+        r => r.rol_sacramento_id !== 4
+      )) {
+
         await PersonaSacramento.create({
-          persona_id_persona: rel.persona_id,
-          rol_sacramento_id_rol_sacra: rel.rol_sacramento_id,
-          sacramento_id_sacramento: nuevoSacramento.id_sacramento
-        }, { transaction: t });
+
+          persona_id_persona:
+            rel.persona_id,
+
+          rol_sacramento_id_rol_sacra:
+            rel.rol_sacramento_id,
+
+          sacramento_id_sacramento:
+            nuevoSacramento.id_sacramento
+
+        }, {
+          transaction: t
+        });
       }
     }
 
+    // =========================================
+    // ACTUALIZAR HISTORICO
+    // =========================================
+
     await historico.update({
+
       estado: 'confirmado',
-      sacramento_id: nuevoSacramento.id_sacramento,
-      fecha_actualizacion: new Date()
-    }, { transaction: t });
 
-    if (historico.tipo_sacramento_id === 3) {
-        const datosMatrimonio = historico.datos_extraidos;
+      sacramento_id:
+        nuevoSacramento.id_sacramento,
 
-        await MatrimonioDetalle.create({
-            sacramento_id_sacramento: nuevoSacramento.id_sacramento,
-            reg_civil: datosMatrimonio.reg_civil ?? null,
-            lugar_ceremonia: datosMatrimonio.lugar_ceremonia ?? null,
-            numero_acta: datosMatrimonio.numero_acta ? parseInt(datosMatrimonio.numero_acta) : null
-        }, { transaction: t });
-    }
+      fecha_actualizacion:
+        new Date()
+
+    }, {
+      transaction: t
+    });
 
     await t.commit();
+
     return res.status(201).json({
+
       ok: true,
-      msg: 'Sacramento confirmado y registrado correctamente',
-      sacramento: nuevoSacramento,
-      historico_id: historico.id
+
+      msg:
+        'Sacramento confirmado correctamente',
+
+      sacramento:
+        nuevoSacramento,
+
+      persona_id:
+        personaPrincipalId,
+
+      persona_creada:
+        personaCreada
+
     });
 
   } catch (error) {
+
     await t.rollback();
-    console.error('Error en confirmarOCR:', error);
+
+    console.error(
+      'Error en confirmarOCR:',
+      error
+    );
+
     return res.status(500).json({
+
       ok: false,
-      msg: 'Error al confirmar el sacramento',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+
+      msg:
+        'Error al confirmar el sacramento',
+
+      error:
+        process.env.NODE_ENV === 'development'
+          ? error.message
+          : undefined
     });
   }
 };
-
 // funcion para listar el histórico de si ya fue registrado
 const getHistoricoOCR = async (req, res = response) => {
   try {
