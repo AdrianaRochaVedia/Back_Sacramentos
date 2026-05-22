@@ -49,10 +49,6 @@ router.put(
     '/rechazar/:id',
     validarJWT,
     validarPermiso('EDITAR_SACRAMENTO'),
-    [
-        check('id', 'El ID debe ser un número válido').isInt(),
-        validarCampos
-    ],
     rechazarOCR
 );
 
