@@ -164,23 +164,21 @@ const procesarOCR = async (req, res = response) => {
 
 // Funcion para validar reglas de negocio y crea el sacramento real desde el histórico
 const confirmarOCR = async (req, res = response) => {
-
   const t = await Sacramento.sequelize.transaction();
 
   try {
-
     const {
-      historico_id,
-      fecha_sacramento,
-      foja,
-      numero,
-      relaciones,
-      nueva_persona
+    historico_id,
+    fecha_sacramento,
+    foja,
+    numero,
+    relaciones = [],
+    nueva_persona,
+    novio_1,
+    novio_2
     } = req.body;
 
     const usuario_id = req.uid;
-
-    console.log("BODY:", req.body);
 
     const historico = await SacramentoOcrHistorico.findOne({
       where: {
@@ -189,8 +187,6 @@ const confirmarOCR = async (req, res = response) => {
       }
     });
 
-    console.log("HISTORICO:", historico?.toJSON());
-
     if (!historico) {
       return res.status(404).json({
         ok: false,
@@ -198,39 +194,72 @@ const confirmarOCR = async (req, res = response) => {
       });
     }
 
+    const tipoSacramento =
+      historico.tipo_sacramento_id ||
+      historico.tipo_sacramento_id_tipo;
+
     let personaPrincipalId = null;
     let personaCreada = false;
+    let personasMatrimonio = [];
 
-    // =========================================
-    // BAUTISMO
-    // =========================================
+    const separarNombreCompleto = (nombreCompleto = '') => {
+      const partes = nombreCompleto.trim().split(/\s+/);
 
-    if (
-      historico.tipo_sacramento_id === 1 ||
-      historico.tipo_sacramento_id_tipo === 1
-    ) {
+      if (partes.length >= 3) {
+        const apellido_materno = partes.pop();
+        const apellido_paterno = partes.pop();
+        const nombre = partes.join(' ');
 
-      console.log("ENTRANDO A BAUTISMO");
-      console.log("NUEVA PERSONA:", nueva_persona);
+        return {
+          nombre,
+          apellido_paterno,
+          apellido_materno
+        };
+      }
 
-      const relPrincipal = relaciones?.find(
-        r => r.rol_sacramento_id === 4
-      );
+      return {
+        nombre: nombreCompleto,
+        apellido_paterno: 'PENDIENTE',
+        apellido_materno: 'PENDIENTE'
+      };
+    };
 
-      // =====================================
-      // PERSONA EXISTENTE
-      // =====================================
+    const buscarPersonaPorNombreCompleto = async (nombreCompleto) => {
+      const datosNombre = separarNombreCompleto(nombreCompleto);
+
+      return await Persona.findOne({
+        where: {
+          nombre: datosNombre.nombre,
+          apellido_paterno: datosNombre.apellido_paterno,
+          apellido_materno: datosNombre.apellido_materno
+        }
+      });
+    };
+
+    const validarTieneSacramento = async (personaId, tipoRequerido) => {
+      return await PersonaSacramento.findOne({
+        where: {
+          persona_id_persona: personaId
+        },
+        include: [{
+          model: Sacramento,
+          as: 'sacramento',
+          where: {
+            tipo_sacramento_id_tipo: tipoRequerido,
+            activo: true
+          }
+        }]
+      });
+    };
+
+    if (tipoSacramento === 1) {
+      const relPrincipal = relaciones.find(r => r.rol_sacramento_id === 4);
 
       if (relPrincipal?.persona_id) {
-
-        const existe = await Persona.findByPk(
-          relPrincipal.persona_id
-        );
+        const existe = await Persona.findByPk(relPrincipal.persona_id);
 
         if (!existe) {
-
           await t.rollback();
-
           return res.status(404).json({
             ok: false,
             msg: `No se encontró la persona con id ${relPrincipal.persona_id}`
@@ -238,343 +267,244 @@ const confirmarOCR = async (req, res = response) => {
         }
 
         personaPrincipalId = relPrincipal.persona_id;
-      }
-
-      // =====================================
-      // NUEVA PERSONA OCR
-      // =====================================
-
-      else if (nueva_persona) {
-
-        // ================================
-        // PROCESAR NOMBRE COMPLETO
-        // ================================
-
+      } else if (nueva_persona) {
         const nombreCompleto =
           nueva_persona.nombre_completo ||
           nueva_persona.nombre ||
           '';
 
-        const partes =
-          nombreCompleto
-            .trim()
-            .split(/\s+/);
+        const datosNombre = separarNombreCompleto(nombreCompleto);
 
-        let nombre = '';
-        let apellido_paterno = '';
-        let apellido_materno = '';
-
-        if (partes.length >= 3) {
-
-          apellido_materno =
-            partes.pop();
-
-          apellido_paterno =
-            partes.pop();
-
-          nombre =
-            partes.join(' ');
-
-        } else {
-
-          nombre =
-            nombreCompleto;
-
-          apellido_paterno =
-            'PENDIENTE';
-
-          apellido_materno =
-            'PENDIENTE';
-        }
-
-        // ================================
-        // CI TEMPORAL ÚNICO
-        // ================================
-
-        const ciTemporal =
-          `OCR-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-
-        // ================================
-        // BUSCAR SI YA EXISTE
-        // ================================
-
-        const wherePersona = {
-          nombre,
-          apellido_paterno,
-          apellido_materno
-        };
-
-        console.log("WHERE PERSONA:", wherePersona);
-
-        const personaExistente =
-          await Persona.findOne({
-            where: wherePersona
-          });
-
-        console.log(
-          "PERSONA EXISTENTE:",
-          personaExistente
-        );
-
-        // ================================
-        // YA EXISTE
-        // ================================
+        const personaExistente = await Persona.findOne({
+          where: datosNombre
+        });
 
         if (personaExistente) {
-
-          personaPrincipalId =
-            personaExistente.id_persona;
-
+          personaPrincipalId = personaExistente.id_persona;
           personaCreada = false;
-        }
+        } else {
+          const ciTemporal =
+            `OCR-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
-        // ================================
-        // CREAR NUEVA
-        // ================================
+          const creada = await Persona.create({
+            nombre: datosNombre.nombre,
+            apellido_paterno: datosNombre.apellido_paterno,
+            apellido_materno: datosNombre.apellido_materno,
+            carnet_identidad: nueva_persona.carnet_identidad || ciTemporal,
+            fecha_nacimiento: nueva_persona.fecha_nacimiento || '1900-01-01',
+            lugar_nacimiento: nueva_persona.lugar_nacimiento || 'PENDIENTE',
+            nombre_padre: nueva_persona.nombre_padre || 'PENDIENTE',
+            nombre_madre: nueva_persona.nombre_madre || 'PENDIENTE',
+            activo: true,
+            estado: 'pendiente_actualizacion'
+          }, { transaction: t });
 
-        else {
-
-          const creada =
-            await Persona.create({
-
-              nombre,
-
-              apellido_paterno,
-
-              apellido_materno,
-
-              carnet_identidad:
-                nueva_persona.carnet_identidad ||
-                ciTemporal,
-
-              fecha_nacimiento:
-                nueva_persona.fecha_nacimiento ||
-                '1900-01-01',
-
-              lugar_nacimiento:
-                nueva_persona.lugar_nacimiento ||
-                'PENDIENTE',
-
-              nombre_padre:
-                nueva_persona.nombre_padre ||
-                'PENDIENTE',
-
-              nombre_madre:
-                nueva_persona.nombre_madre ||
-                'PENDIENTE',
-
-              activo: true,
-
-              estado:
-                'pendiente_actualizacion'
-
-            }, {
-              transaction: t
-            });
-
-          console.log(
-            "PERSONA CREADA:",
-            creada
-          );
-
-          personaPrincipalId =
-            creada.id_persona;
-
+          personaPrincipalId = creada.id_persona;
           personaCreada = true;
         }
-
-      }
-
-      // =====================================
-      // ERROR
-      // =====================================
-
-      else {
-
+      } else {
         await t.rollback();
-
         return res.status(400).json({
           ok: false,
           msg: 'Debe enviar persona_id o nueva_persona'
         });
       }
-
     }
 
-    // =========================================
-    // OTROS SACRAMENTOS
-    // =========================================
+    if (tipoSacramento === 2) {
+      const relPrincipal = relaciones.find(r => r.rol_sacramento_id === 4);
 
-    else {
+      if (relPrincipal?.persona_id) {
+        const existe = await Persona.findByPk(relPrincipal.persona_id);
 
-      console.log("NO ES BAUTISMO");
+        if (!existe) {
+          await t.rollback();
+          return res.status(404).json({
+            ok: false,
+            msg: 'No se encontró la persona'
+          });
+        }
 
-      const relPrincipal = relaciones?.find(
-        r => r.rol_sacramento_id === 4
-      );
+        personaPrincipalId = relPrincipal.persona_id;
+      } else if (nueva_persona?.nombre_completo || nueva_persona?.nombre) {
+        const nombreCompleto =
+          nueva_persona.nombre_completo ||
+          nueva_persona.nombre;
 
-      if (!relPrincipal?.persona_id) {
+        const personaExistente =
+          await buscarPersonaPorNombreCompleto(nombreCompleto);
 
+        if (!personaExistente) {
+          await t.rollback();
+          return res.status(404).json({
+            ok: false,
+            msg: 'La persona debe estar registrada previamente para confirmación'
+          });
+        }
+
+        personaPrincipalId = personaExistente.id_persona;
+      } else {
         await t.rollback();
-
         return res.status(400).json({
           ok: false,
-          msg: 'La persona debe estar registrada previamente'
+          msg: 'Debe enviar persona_id o nombre_completo'
         });
       }
 
-      const existe = await Persona.findByPk(
-        relPrincipal.persona_id
+      const tieneBautismo = await validarTieneSacramento(personaPrincipalId, 1);
+
+      if (!tieneBautismo) {
+        await t.rollback();
+        return res.status(400).json({
+          ok: false,
+          msg: 'La persona debe estar bautizada antes de recibir la confirmación'
+        });
+      }
+    }
+
+    if (tipoSacramento === 3) {
+
+  const nombresNovios = [
+    {
+      rol_sacramento_id: 4,
+      nombre_completo: novio_1?.nombre_completo
+    },
+    {
+      rol_sacramento_id: 5,
+      nombre_completo: novio_2?.nombre_completo
+    }
+  ];
+
+  for (const novio of nombresNovios) {
+
+    if (!novio.nombre_completo) {
+      await t.rollback();
+
+      return res.status(400).json({
+        ok: false,
+        msg: 'Debe enviar los nombres completos de ambos novios'
+      });
+    }
+
+    const persona =
+      await buscarPersonaPorNombreCompleto(
+        novio.nombre_completo
       );
 
-      if (!existe) {
+    if (!persona) {
 
-        await t.rollback();
+      await t.rollback();
 
-        return res.status(404).json({
-          ok: false,
-          msg: `No se encontró la persona`
-        });
-      }
-
-      personaPrincipalId =
-        relPrincipal.persona_id;
+      return res.status(404).json({
+        ok: false,
+        msg: `No se encontró a ${novio.nombre_completo}`
+      });
     }
 
-    // =========================================
-    // CREAR SACRAMENTO
-    // =========================================
+    const tieneBautismo =
+      await validarTieneSacramento(
+        persona.id_persona,
+        1
+      );
 
-    const nuevoSacramento =
-      await Sacramento.create({
+    const tieneConfirmacion =
+      await validarTieneSacramento(
+        persona.id_persona,
+        2
+      );
 
-        fecha_sacramento,
-        foja,
-        numero,
+    if (!tieneBautismo || !tieneConfirmacion) {
 
-        tipo_sacramento_id_tipo:
-          historico.tipo_sacramento_id ||
-          historico.tipo_sacramento_id_tipo,
+      await t.rollback();
 
-        institucion_parroquia_id_parroquia:
-          historico.institucion_parroquia_id,
-
-        usuario_id_usuario:
-          usuario_id,
-
-        activo: true,
-
-        fecha_registro: new Date(),
-
-        fecha_actualizacion: new Date()
-
-      }, {
-        transaction: t
+      return res.status(400).json({
+        ok: false,
+        msg:
+          `${novio.nombre_completo} debe tener bautismo y confirmación antes del matrimonio`
       });
+    }
 
-    // =========================================
-    // RELACION PERSONA SACRAMENTO
-    // =========================================
-
-    await PersonaSacramento.create({
-
-      persona_id_persona:
-        personaPrincipalId,
-
-      rol_sacramento_id_rol_sacra: 4,
-
-      sacramento_id_sacramento:
-        nuevoSacramento.id_sacramento
-
-    }, {
-      transaction: t
+    personasMatrimonio.push({
+      persona_id: persona.id_persona,
+      rol_sacramento_id: novio.rol_sacramento_id
     });
+  }
 
-    // =========================================
-    // OTRAS RELACIONES
-    // =========================================
+  personaPrincipalId =
+    personasMatrimonio[0].persona_id;
+}
 
-    if (relaciones && Array.isArray(relaciones)) {
+    const nuevoSacramento = await Sacramento.create({
+      fecha_sacramento,
+      foja,
+      numero,
+      tipo_sacramento_id_tipo: tipoSacramento,
+      institucion_parroquia_id_parroquia: historico.institucion_parroquia_id,
+      usuario_id_usuario: usuario_id,
+      activo: true,
+      fecha_registro: new Date(),
+      fecha_actualizacion: new Date()
+    }, { transaction: t });
 
-      for (const rel of relaciones.filter(
-        r => r.rol_sacramento_id !== 4
-      )) {
+    if (tipoSacramento === 3) {
+      for (const persona of personasMatrimonio) {
+        await PersonaSacramento.create({
+          persona_id_persona: persona.persona_id,
+          rol_sacramento_id_rol_sacra: persona.rol_sacramento_id,
+          sacramento_id_sacramento: nuevoSacramento.id_sacramento
+        }, { transaction: t });
+      }
+    } else {
+      await PersonaSacramento.create({
+        persona_id_persona: personaPrincipalId,
+        rol_sacramento_id_rol_sacra: 4,
+        sacramento_id_sacramento: nuevoSacramento.id_sacramento
+      }, { transaction: t });
+
+      for (const rel of relaciones) {
+        if (
+            tipoSacramento !== 3 &&
+            rel.rol_sacramento_id === 4
+        ) {
+            continue;
+        }
 
         await PersonaSacramento.create({
-
-          persona_id_persona:
-            rel.persona_id,
-
-          rol_sacramento_id_rol_sacra:
-            rel.rol_sacramento_id,
-
-          sacramento_id_sacramento:
-            nuevoSacramento.id_sacramento
-
-        }, {
-          transaction: t
-        });
-      }
+            persona_id_persona: rel.persona_id,
+            rol_sacramento_id_rol_sacra: rel.rol_sacramento_id,
+            sacramento_id_sacramento: nuevoSacramento.id_sacramento
+        }, { transaction: t });
+        }
     }
 
-    // =========================================
-    // ACTUALIZAR HISTORICO
-    // =========================================
-
     await historico.update({
-
       estado: 'confirmado',
-
-      sacramento_id:
-        nuevoSacramento.id_sacramento,
-
-      fecha_actualizacion:
-        new Date()
-
-    }, {
-      transaction: t
-    });
+      sacramento_id: nuevoSacramento.id_sacramento,
+      fecha_actualizacion: new Date()
+    }, { transaction: t });
 
     await t.commit();
 
     return res.status(201).json({
-
       ok: true,
-
-      msg:
-        'Sacramento confirmado correctamente',
-
-      sacramento:
-        nuevoSacramento,
-
-      persona_id:
-        personaPrincipalId,
-
-      persona_creada:
-        personaCreada
-
+      msg: 'Sacramento confirmado correctamente',
+      sacramento: nuevoSacramento,
+      persona_id: personaPrincipalId,
+      personas_matrimonio: personasMatrimonio,
+      persona_creada: personaCreada
     });
 
   } catch (error) {
-
     await t.rollback();
 
-    console.error(
-      'Error en confirmarOCR:',
-      error
-    );
+    console.error('Error en confirmarOCR:', error);
 
     return res.status(500).json({
-
       ok: false,
-
-      msg:
-        'Error al confirmar el sacramento',
-
-      error:
-        process.env.NODE_ENV === 'development'
-          ? error.message
-          : undefined
+      msg: 'Error al confirmar el sacramento',
+      error: process.env.NODE_ENV === 'development'
+        ? error.message
+        : undefined
     });
   }
 };
