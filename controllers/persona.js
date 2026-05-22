@@ -3,8 +3,8 @@ const {Op,literal} = require('sequelize');
 const Persona = require('../models/Persona');
 const PersonaSacramento = require('../models/PersonaSacramento');
 const RolSacramento = require('../models/RolSacramento');
-const requisitos = require('./utils/sacramentos');
-const rolesReq = require('./utils/rolesSacramentos');
+const requisitos = require('../utils/sacramentos');
+const rolesReq = require('../utils/rolesSacramentos');
 const { combinarCondiciones } = require('../middlewares/busqueda');
 
 const tieneRol = (nombreRol) =>
@@ -289,6 +289,7 @@ const actualizarPersona = async (req, res) => {
     if (Object.keys(updates).length === 0) {
       return res.status(400).json({ ok:false, msg:'No se enviaron campos a actualizar' });
     }
+    res.locals._instancia = persona;
 
     const personaActualizada = await persona.update(updates);
 
@@ -319,6 +320,7 @@ const eliminarPersona = async (req, res = response) => {
                 msg: 'Persona no encontrada'
             });
         }
+        res.locals._instancia = persona;
 
         await persona.update({ activo: false });
 
