@@ -253,7 +253,7 @@ const confirmarOCR = async (req, res = response) => {
     };
 
     if (tipoSacramento === 1) {
-      const relPrincipal = relaciones.find(r => r.rol_sacramento_id === 4);
+      const relPrincipal = relaciones.find(r => r.rol_sacramento_id === 1);
 
       if (relPrincipal?.persona_id) {
         const existe = await Persona.findByPk(relPrincipal.persona_id);
