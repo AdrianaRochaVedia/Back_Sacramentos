@@ -17,7 +17,7 @@ router.post(
     upload.single('imagen'),
     [
         check('tipo_sacramento_id', 'El tipo de sacramento es obligatorio').isInt(),
-        check('institucion_parroquia_id', 'La parroquia es obligatoria').isInt(),
+        check('institucion_parroquia_id').optional().isInt(),
         validarCampos
     ],
     procesarOCR

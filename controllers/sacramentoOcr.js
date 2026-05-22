@@ -10,6 +10,7 @@ const PersonaSacramento = require('../models/PersonaSacramento');
 const Persona = require('../models/Persona');
 const TipoSacramento = require('../models/TipoSacramento');
 const Parroquia = require('../models/Parroquia');
+const MatrimonioDetalle = require('../models/MatrimonioDetalle');
 
 // Funcion para subir imagen, hacer el OCR y guardar en histórico como 'pendiente'
 const procesarOCR = async (req, res = response) => {
@@ -19,15 +20,16 @@ const procesarOCR = async (req, res = response) => {
     }
 
     const { tipo_sacramento_id, institucion_parroquia_id } = req.body;
-    const usuario_id = req.uid; 
-    if (!tipo_sacramento_id || !institucion_parroquia_id) {
+    const usuario_id = req.uid;
+
+    if (!tipo_sacramento_id) {
       return res.status(400).json({
         ok: false,
-        msg: 'Faltan campos: tipo_sacramento_id, institucion_parroquia_id'
+        msg: 'Falta campo: tipo_sacramento_id'
       });
     }
 
-    // Para subir a S3 en carpeta temporal
+    // Subir a S3
     const fileContent = fs.readFileSync(req.file.path);
     const key = `sacramentos/temp/${Date.now()}-${req.file.originalname}`;
 
@@ -38,7 +40,7 @@ const procesarOCR = async (req, res = response) => {
       ContentType: req.file.mimetype
     }));
 
-    // Para OCR con Textract
+    // OCR con Textract
     const textractResponse = await textract.send(new AnalyzeDocumentCommand({
       Document: {
         S3Object: { Bucket: process.env.AWS_BUCKET_NAME, Name: key }
@@ -46,41 +48,82 @@ const procesarOCR = async (req, res = response) => {
       FeatureTypes: ['FORMS', 'TABLES']
     }));
 
-    // Para parsear según tipo de sacramento
     const texto = textractResponse.Blocks
       .filter(b => b.BlockType === 'LINE')
       .map(b => b.Text)
       .join('\n');
+
     console.log('=== TEXTO EXTRAIDO ===');
-    console.log(texto);  
+    console.log(texto);
     console.log('=====================');
 
     const datosDetectados = parsearSegunTipo(texto, parseInt(tipo_sacramento_id));
 
-    // Para guardar en histórico con estado 'pendiente'
+    // ── Resolución de parroquia ──────────────────────────────────────────
+    let parroquiaId = institucion_parroquia_id ? parseInt(institucion_parroquia_id) : null;
+    let parroquiaNueva = false;
+
+    if (datosDetectados.parroquia) {
+      // El OCR extrajo un nombre → buscar o crear
+      const [parroquia, creada] = await Parroquia.findOrCreate({
+        where: { nombre: datosDetectados.parroquia },
+        defaults: {
+          nombre: datosDetectados.parroquia,
+          direccion: 'Por completar',
+          telefono: 'Por completar',
+          email: `parroquia_${Date.now()}@pendiente.com` // único por el constraint
+        }
+      });
+
+      parroquiaId = parroquia.id_parroquia;
+      parroquiaNueva = creada;
+
+      if (creada) {
+        console.log(`Nueva parroquia registrada desde OCR: "${parroquia.nombre}" (id: ${parroquia.id_parroquia})`);
+      }
+
+    } else if (!parroquiaId) {
+      // No hay parroquia en el OCR ni en el body → error
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({
+        ok: false,
+        msg: 'No se pudo detectar la parroquia en el documento y no se proporcionó institucion_parroquia_id'
+      });
+    }
+    // ────────────────────────────────────────────────────────────────────
+
+    // Guardar en histórico
     const historico = await SacramentoOcrHistorico.create({
       datos_extraidos: datosDetectados,
       s3_key: key,
       estado: 'pendiente',
       usuario_id,
-      institucion_parroquia_id: parseInt(institucion_parroquia_id),
+      institucion_parroquia_id: parroquiaId,
       tipo_sacramento_id: parseInt(tipo_sacramento_id),
       fecha_registro: new Date(),
       fecha_actualizacion: new Date()
     });
 
-    // Para limpiar archivo temporal local
     fs.unlinkSync(req.file.path);
 
     return res.json({
       ok: true,
       msg: 'OCR procesado correctamente',
-      historico_id: historico.id,      
+      historico_id: historico.id,
       datosDetectados,
-      s3_key: key
+      s3_key: key,
+      parroquia: {
+        id: parroquiaId,
+        nombre: datosDetectados.parroquia ?? null,
+        nueva: parroquiaNueva  // el frontend puede avisar "parroquia creada, completar datos"
+      }
     });
 
   } catch (error) {
+    // Limpiar archivo aunque falle
+    if (req.file?.path) {
+      try { fs.unlinkSync(req.file.path); } catch (_) {}
+    }
     console.error('Error en procesarOCR:', error);
     return res.status(500).json({
       ok: false,
@@ -208,6 +251,17 @@ const confirmarOCR = async (req, res = response) => {
       sacramento_id: nuevoSacramento.id_sacramento,
       fecha_actualizacion: new Date()
     }, { transaction: t });
+
+    if (historico.tipo_sacramento_id === 3) {
+        const datosMatrimonio = historico.datos_extraidos;
+
+        await MatrimonioDetalle.create({
+            sacramento_id_sacramento: nuevoSacramento.id_sacramento,
+            reg_civil: datosMatrimonio.reg_civil ?? null,
+            lugar_ceremonia: datosMatrimonio.lugar_ceremonia ?? null,
+            numero_acta: datosMatrimonio.numero_acta ? parseInt(datosMatrimonio.numero_acta) : null
+        }, { transaction: t });
+    }
 
     await t.commit();
     return res.status(201).json({
