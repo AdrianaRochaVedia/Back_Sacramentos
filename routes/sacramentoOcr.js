@@ -3,7 +3,7 @@ const { check } = require('express-validator');
 const { validarCampos } = require('../middlewares/validar-campos');
 const { validarJWT } = require('../middlewares/validar-jwt');
 const { validarPermiso } = require('../middlewares/validarPermiso');
-const { procesarOCR, confirmarOCR, getHistoricoOCR, rechazarOCR } = require('../controllers/sacramentoOcr');
+const { procesarOCR, confirmarOCR, getHistoricoOCR, rechazarOCR, confirmarParroquiaOCR, crearYConfirmarParroquiaOCR } = require('../controllers/sacramentoOcr');
 const multer = require('multer');
 
 const upload = multer({ dest: 'uploads/' });
@@ -50,6 +50,27 @@ router.put(
     validarJWT,
     validarPermiso('EDITAR_SACRAMENTO'),
     rechazarOCR
+);
+
+router.put(
+    '/parroquia/:id',
+    validarJWT,
+    validarPermiso('EDITAR_SACRAMENTO'),
+    confirmarParroquiaOCR
+);
+
+router.post(
+    '/parroquia/crear/:id',
+    validarJWT,
+    validarPermiso('EDITAR_SACRAMENTO'),
+    [
+        check('nombre_parroquia', 'El nombre de la parroquia es obligatorio').not().isEmpty(),
+        check('direccion').optional().not().isEmpty(),
+        check('telefono').optional().not().isEmpty(),
+        check('email').optional().isEmail(),
+        validarCampos
+    ],
+    crearYConfirmarParroquiaOCR
 );
 
 module.exports = router;

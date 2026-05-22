@@ -23,19 +23,20 @@ const SacramentoOcrHistorico = sequelize.define('SacramentoOcrHistorico', {
     allowNull: false,
     defaultValue: 'pendiente',
     validate: {
-      isIn: [['pendiente', 'confirmado', 'rechazado']]
+      isIn: [['pendiente', 'confirmado', 'rechazado', 'esperando_parroquia']] // ← agregar
     }
+  },
+  institucion_parroquia_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true,  // ← cambiar a true
+    references: { model: 'institucion_parroquia', key: 'id_parroquia' }
   },
   usuario_id: {
     type: DataTypes.INTEGER,
     allowNull: false,
     references: { model: 'usuario', key: 'id_usuario' }
   },
-  institucion_parroquia_id: {
-    type: DataTypes.INTEGER,
-    allowNull: false,
-    references: { model: 'institucion_parroquia', key: 'id_parroquia' }
-  },
+
   tipo_sacramento_id: {
     type: DataTypes.INTEGER,
     allowNull: false,

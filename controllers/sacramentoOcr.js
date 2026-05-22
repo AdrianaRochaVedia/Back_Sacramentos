@@ -64,36 +64,46 @@ const procesarOCR = async (req, res = response) => {
 
     if (!parroquiaId && datosDetectados.parroquia) {
 
-    // El usuario aprobó crear una nueva parroquia
-    if (req.body.crear_parroquia === 'true' && req.body.nombre_parroquia) {
+      if (req.body.crear_parroquia === 'true' && req.body.nombre_parroquia) {
         const nueva = await Parroquia.create({
-        nombre: req.body.nombre_parroquia,
-        direccion: 'Por completar',
-        telefono: 'Por completar',
-        email: `parroquia_${Date.now()}@pendiente.com`
+          nombre: req.body.nombre_parroquia,
+          direccion: 'Por completar',
+          telefono: 'Por completar',
+          email: `parroquia_${Date.now()}@pendiente.com`
         });
         parroquiaId = nueva.id_parroquia;
 
-    } else {
-        // Pedir confirmación al frontend 
+      } else {
+        const historico = await SacramentoOcrHistorico.create({
+          datos_extraidos: datosDetectados,
+          s3_key: key,
+          estado: 'esperando_parroquia',
+          usuario_id,
+          institucion_parroquia_id: null,
+          tipo_sacramento_id: parseInt(tipo_sacramento_id),
+          fecha_registro: new Date(),
+          fecha_actualizacion: new Date()
+        });
+
         fs.unlinkSync(req.file.path);
         return res.status(200).json({
-        ok: false,
-        requiere_confirmacion_parroquia: true,
-        msg: 'No se pudo identificar la parroquia con certeza. Por favor selecciona o confirma.',
-        parroquia_detectada: datosDetectados.parroquia,
-        datos_ocr: datosDetectados,
-        tipo_sacramento_id: parseInt(tipo_sacramento_id)
+          ok: false,
+          requiere_confirmacion_parroquia: true,
+          msg: 'No se pudo identificar la parroquia con certeza. Por favor selecciona o confirma.',
+          historico_id: historico.id,
+          parroquia_detectada: datosDetectados.parroquia,
+          datos_ocr: datosDetectados,
+          tipo_sacramento_id: parseInt(tipo_sacramento_id)
         });
-    }
+      }
     }
 
     if (!parroquiaId) {
-    fs.unlinkSync(req.file.path);
-    return res.status(400).json({
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({
         ok: false,
         msg: 'No se pudo detectar la parroquia en el documento y no se proporcionó institucion_parroquia_id'
-    });
+      });
     }
 
     // Guardar en histórico
@@ -118,12 +128,11 @@ const procesarOCR = async (req, res = response) => {
       s3_key: key,
       parroquia: {
         id: parroquiaId,
-        nombre: datosDetectados.parroquia ?? null, 
+        nombre: req.body.nombre_parroquia ?? datosDetectados.parroquia ?? null
       }
     });
 
   } catch (error) {
-    // Limpiar archivo aunque falle
     if (req.file?.path) {
       try { fs.unlinkSync(req.file.path); } catch (_) {}
     }
@@ -372,9 +381,104 @@ const rechazarOCR = async (req, res = response) => {
   }
 };
 
+//Para confirmar parroquia
+const confirmarParroquiaOCR = async (req, res = response) => {
+  try {
+    const { id } = req.params;
+    const { institucion_parroquia_id } = req.body;
+
+    if (!institucion_parroquia_id) {
+      return res.status(400).json({ ok: false, msg: 'Falta institucion_parroquia_id' });
+    }
+
+    const historico = await SacramentoOcrHistorico.findOne({
+      where: { id, estado: 'esperando_parroquia' }
+    });
+
+    if (!historico) {
+      return res.status(404).json({ ok: false, msg: 'Histórico no encontrado o ya fue procesado' });
+    }
+
+    await historico.update({
+      institucion_parroquia_id: parseInt(institucion_parroquia_id),
+      estado: 'pendiente',
+      fecha_actualizacion: new Date()
+    });
+
+    return res.json({
+      ok: true,
+      msg: 'Parroquia confirmada correctamente',
+      historico_id: historico.id
+    });
+
+  } catch (error) {
+    console.error('Error en confirmarParroquiaOCR:', error);
+    return res.status(500).json({ ok: false, msg: 'Error al confirmar parroquia' });
+  }
+};
+
+const crearYConfirmarParroquiaOCR = async (req, res = response) => {
+  try {
+    const { id } = req.params;
+    const {
+      nombre_parroquia,
+      direccion = 'Por completar',
+      telefono = 'Por completar',
+      email
+    } = req.body;
+
+    // Buscar el histórico en estado esperando_parroquia
+    const historico = await SacramentoOcrHistorico.findOne({
+      where: { id, estado: 'esperando_parroquia' }
+    });
+
+    if (!historico) {
+      return res.status(404).json({
+        ok: false,
+        msg: 'Histórico no encontrado o ya fue procesado'
+      });
+    }
+
+    // Crear la parroquia nueva
+    const nuevaParroquia = await Parroquia.create({
+      nombre: nombre_parroquia,
+      direccion,
+      telefono,
+      email: email ?? `parroquia_${Date.now()}@pendiente.com`
+    });
+
+    // Actualizar el histórico a 'pendiente' con la nueva parroquia
+    await historico.update({
+      institucion_parroquia_id: nuevaParroquia.id_parroquia,
+      estado: 'pendiente',
+      fecha_actualizacion: new Date()
+    });
+
+    return res.json({
+      ok: true,
+      msg: 'Parroquia creada y asignada correctamente',
+      historico_id: historico.id,
+      parroquia: {
+        id: nuevaParroquia.id_parroquia,
+        nombre: nuevaParroquia.nombre
+      }
+    });
+
+  } catch (error) {
+    console.error('Error en crearYConfirmarParroquiaOCR:', error);
+    return res.status(500).json({
+      ok: false,
+      msg: 'Error al crear la parroquia',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
 module.exports = {
   procesarOCR,
   confirmarOCR,
   getHistoricoOCR,
-  rechazarOCR
+  rechazarOCR,
+  confirmarParroquiaOCR,
+  crearYConfirmarParroquiaOCR
 };
