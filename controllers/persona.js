@@ -1,11 +1,37 @@
 const { response } = require('express');
+const {Op,literal} = require('sequelize');
 const Persona = require('../models/Persona');
 const PersonaSacramento = require('../models/PersonaSacramento');
 const RolSacramento = require('../models/RolSacramento');
 const requisitos = require('./utils/sacramentos');
 const rolesReq = require('./utils/rolesSacramentos');
 const { combinarCondiciones } = require('../middlewares/busqueda');
-const { Op } = require('sequelize');
+
+const tieneRol = (nombreRol) =>
+  literal(`EXISTS (
+    SELECT 1
+    FROM   persona_sacramento  ps
+    JOIN   rol_sacramento      rs ON rs.id_rol_sacra = ps.rol_sacramento_id_rol_sacra
+    WHERE  ps.persona_id_persona = "Persona"."id_persona"
+    AND    UPPER(rs.nombre)      = '${nombreRol.toUpperCase()}'
+  )`);
+const noTieneRol = (nombreRol) =>
+  literal(`NOT EXISTS (
+    SELECT 1
+    FROM   persona_sacramento  ps
+    JOIN   rol_sacramento      rs ON rs.id_rol_sacra = ps.rol_sacramento_id_rol_sacra
+    WHERE  ps.persona_id_persona = "Persona"."id_persona"
+    AND    UPPER(rs.nombre)      = '${nombreRol.toUpperCase()}'
+  )`);
+
+const buildReglasWhere = ({ requeridos = [], excluir = [] }) => [
+  ...requeridos.map(tieneRol),
+  ...excluir.map(noTieneRol),
+];
+const TABLAS_REGLAS = {
+  sacramento: requisitos,
+  rol:        rolesReq,
+};
 
 const getPersonas = async (req, res = response) => {
     try {
@@ -312,33 +338,32 @@ const eliminarPersona = async (req, res = response) => {
 //intento endpoint para todos los sacramentos 
 const buscarPersonasParaSacramento = async (req, res) => {
   try {
-    let { search, rol: claveRol, tipo } = req.query;
-
-    if (!search || !claveRol)
-      return res.status(400).json({ ok: false, msg: "Faltan parámetros" });
-
-    // Normalizar
+    let { search, rol: claveRol, tipo = "sacramento" } = req.query;
+ 
+    // --- Validación de parámetros ---
+    if (!search?.trim() || !claveRol?.trim()) {
+      return res.status(400).json({ ok: false, msg: "Faltan parámetros: search y rol son obligatorios" });
+    }
+ 
+    tipo     = tipo.toLowerCase();
     claveRol = claveRol.toLowerCase();
-    tipo = tipo?.toLowerCase() || "sacramento"; // por defecto sacramento
-
-    // Seleccionar la tabla correcta de requisitos
-    let reglasBase;
-    if (tipo === "sacramento") reglasBase = requisitos;
-    else if (tipo === "rol") reglasBase = rolesReq;
-    else
-      return res.status(400).json({ ok: false, msg: "Tipo inválido (sacramento | rol)" });
-
-    // Buscar clave real dentro de reglasBase sin importar mayúsculas
-    const clave = Object.keys(reglasBase).find(
-      (key) => key.toLowerCase() === claveRol
+ 
+    const tablaReglas = TABLAS_REGLAS[tipo];
+    if (!tablaReglas) {
+      return res.status(400).json({ ok: false, msg: "Tipo inválido — use 'sacramento' o 'rol'" });
+    }
+ 
+    // Búsqueda de clave insensible a mayúsculas
+    const claveReal = Object.keys(tablaReglas).find(
+      (k) => k.toLowerCase() === claveRol
     );
-
-    if (!clave)
-      return res.status(400).json({ ok: false, msg: "Rol o sacramento inválido" });
-
-    const regla = reglasBase[clave];
-
-    // 1. Buscar personas por coincidencia de nombre o CI
+    if (!claveReal) {
+      return res.status(400).json({ ok: false, msg: `Rol o sacramento desconocido: '${claveRol}'` });
+    }
+ 
+    const regla = tablaReglas[claveReal];
+ 
+    // --- Consulta con todo el filtrado en la BD ---
     const personas = await Persona.findAll({
       attributes: [
         "id_persona",
@@ -349,52 +374,25 @@ const buscarPersonasParaSacramento = async (req, res) => {
       ],
       where: {
         activo: true,
+ 
+        // Búsqueda de texto
         [Op.or]: [
-          { nombre: { [Op.iLike]: `%${search}%` } },
+          { nombre:           { [Op.iLike]: `%${search}%` } },
           { apellido_paterno: { [Op.iLike]: `%${search}%` } },
           { apellido_materno: { [Op.iLike]: `%${search}%` } },
-          { carnet_identidad: { [Op.iLike]: `%${search}%` } }
-        ]
+          { carnet_identidad: { [Op.iLike]: `%${search}%` } },
+        ],
+ 
+        // Reglas de sacramentos — todo resuelto en SQL, sin filtro en JS
+        [Op.and]: buildReglasWhere(regla),
       },
-      include: [
-        {
-          model: PersonaSacramento,
-          as: "personaSacramentos",
-          include: [
-            {
-              model: RolSacramento,
-              as: "rolSacramento",
-              attributes: ["nombre"]
-            }
-          ],
-          required: false
-        }
-      ]
     });
-
-    // 2. Filtrar según las reglas
-    const resultado = personas.filter((p) => {
-      const roles = p.personaSacramentos.map(r => r.rolSacramento.nombre.toUpperCase());
-
-       console.log("----");
-        console.log("Persona:", p.id_persona, p.nombre, p.apellido_paterno);
-        console.log("Roles:", roles);
-        console.log("Regla requerida:", regla.requeridos);
-        console.log("Cumple requeridos:", regla.requeridos.every(req => roles.includes(req)));
-        console.log("Regla requerida:", regla.requeridos);
-        console.log("Cumple:", regla.requeridos.every(req => roles.includes(req)));
-
-      const cumpleRequeridos = regla.requeridos.every(req => roles.includes(req));
-      const noTieneExcluidos = !regla.excluir.some(ex => roles.includes(ex));
-
-      return cumpleRequeridos && noTieneExcluidos;
-    });
-
-    return res.json({ ok: true, personas: resultado });
-
+ 
+    return res.json({ ok: true, personas });
+ 
   } catch (error) {
     console.error("Error en buscarPersonasParaSacramento:", error);
-    return res.status(500).json({ ok: false, msg: "Error en búsqueda" });
+    return res.status(500).json({ ok: false, msg: "Error interno en búsqueda" });
   }
 };
 

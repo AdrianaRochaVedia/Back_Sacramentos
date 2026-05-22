@@ -22,10 +22,10 @@ const getParroquias = async (req, res = response) => {
         } = req.query;
   
         const camposBusqueda = [
-            'nombre',
-            'direccion',
-            'telefono',
-            'email'
+            'Parroquia.nombre',
+            'Parroquia.direccion',
+            'Parroquia.telefono',
+            'Parroquia.email'
         ];
         
         const filtros = {
