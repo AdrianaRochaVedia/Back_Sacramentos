@@ -311,7 +311,7 @@ const confirmarOCR = async (req, res = response) => {
       }
     }
 
-    if (tipoSacramento === 2) {
+    if (tipoSacramento === 3) {
       const relPrincipal = relaciones.find(r => r.rol_sacramento_id === 4);
 
       if (relPrincipal?.persona_id) {
@@ -362,7 +362,7 @@ const confirmarOCR = async (req, res = response) => {
       }
     }
 
-    if (tipoSacramento === 3) {
+    if (tipoSacramento === 4) {
       const relPrincipal = relaciones.find(r => r.rol_sacramento_id === 8);
 
       if (relPrincipal?.persona_id) {
@@ -403,7 +403,7 @@ const confirmarOCR = async (req, res = response) => {
       }
 
       const tieneBautismo = await validarTieneSacramento(personaPrincipalId, 1);
-      const tienePrimeraComunion = await validarTieneSacramento(personaPrincipalId, 2);
+      const tienePrimeraComunion = await validarTieneSacramento(personaPrincipalId, 3);
 
       if (!tieneBautismo || !tienePrimeraComunion) {
         await t.rollback();
@@ -414,7 +414,7 @@ const confirmarOCR = async (req, res = response) => {
       }
     }
 
-    if (tipoSacramento === 4) {
+    if (tipoSacramento === 2) {
 
   const nombresNovios = [
     {
@@ -462,13 +462,13 @@ const confirmarOCR = async (req, res = response) => {
     const tienePrimeraComunion =
       await validarTieneSacramento(
         persona.id_persona,
-        2
+        3
       );
 
     const tieneConfirmacion =
       await validarTieneSacramento(
         persona.id_persona,
-        3
+        4
       );
 
     if (!tieneBautismo || !tienePrimeraComunion || !tieneConfirmacion) {
@@ -524,7 +524,7 @@ const confirmarOCR = async (req, res = response) => {
       fecha_actualizacion: new Date()
     }, { transaction: t });
 
-    if (tipoSacramento === 4) {
+    if (tipoSacramento === 2) {
         const datosMatrimonio = historico.datos_extraidos || {};
 
         await MatrimonioDetalle.create({
@@ -537,7 +537,7 @@ const confirmarOCR = async (req, res = response) => {
         }, { transaction: t });
     }
 
-    if (tipoSacramento === 4) {
+    if (tipoSacramento === 2) {
       for (const persona of personasMatrimonio) {
         await PersonaSacramento.create({
           persona_id_persona: persona.persona_id,

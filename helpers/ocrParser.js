@@ -206,9 +206,9 @@ primeracomunion: (texto) => {
 
 const tipoSacramentoMap = {
   1: 'bautismo',
-  2: 'primeracomunion',
-  3: 'confirmacion',
-  4: 'matrimonio'
+  2: 'matrimonio',
+  3: 'primeracomunion',
+  4: 'confirmacion'
 };
 
 const parsearSegunTipo = (texto, tipoSacramentoId) => {
