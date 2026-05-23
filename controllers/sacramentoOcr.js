@@ -546,26 +546,34 @@ const confirmarOCR = async (req, res = response) => {
         }, { transaction: t });
       }
     } else {
+
+      let rolPrincipal = 1;
+
+      if (tipoSacramento === 1) {
+        rolPrincipal = 1; // bautizado
+      }
+
+      if (tipoSacramento === 3) {
+        rolPrincipal = 8; // comulgado
+      }
+
+      if (tipoSacramento === 4) {
+        rolPrincipal = 4; // confirmado
+      }
+
       await PersonaSacramento.create({
-        persona_id_persona: personaPrincipalId,
-        rol_sacramento_id_rol_sacra: 4,
-        sacramento_id_sacramento: nuevoSacramento.id_sacramento
+
+        persona_id_persona:
+          personaPrincipalId,
+
+        rol_sacramento_id_rol_sacra:
+          rolPrincipal,
+
+        sacramento_id_sacramento:
+          nuevoSacramento.id_sacramento
+
       }, { transaction: t });
 
-      for (const rel of relaciones) {
-        if (
-            tipoSacramento !== 3 &&
-            rel.rol_sacramento_id === 4
-        ) {
-            continue;
-        }
-
-        await PersonaSacramento.create({
-            persona_id_persona: rel.persona_id,
-            rol_sacramento_id_rol_sacra: rel.rol_sacramento_id,
-            sacramento_id_sacramento: nuevoSacramento.id_sacramento
-        }, { transaction: t });
-        }
     }
 
     await historico.update({
