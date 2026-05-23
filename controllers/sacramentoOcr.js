@@ -362,57 +362,57 @@ const confirmarOCR = async (req, res = response) => {
       }
     }
 
-    if (tipoSacramento === 4) {
-      const relPrincipal = relaciones.find(r => r.rol_sacramento_id === 8);
+    // if (tipoSacramento === 4) {
+    //   const relPrincipal = relaciones.find(r => r.rol_sacramento_id === 8);
 
-      if (relPrincipal?.persona_id) {
-        const existe = await Persona.findByPk(relPrincipal.persona_id);
+    //   if (relPrincipal?.persona_id) {
+    //     const existe = await Persona.findByPk(relPrincipal.persona_id);
 
-        if (!existe) {
-          await t.rollback();
-          return res.status(404).json({
-            ok: false,
-            msg: 'No se encontró la persona'
-          });
-        }
+    //     if (!existe) {
+    //       await t.rollback();
+    //       return res.status(404).json({
+    //         ok: false,
+    //         msg: 'No se encontró la persona'
+    //       });
+    //     }
 
-        personaPrincipalId = relPrincipal.persona_id;
-      } else if (nueva_persona?.nombre_completo || nueva_persona?.nombre) {
-        const nombreCompleto =
-          nueva_persona.nombre_completo ||
-          nueva_persona.nombre;
+    //     personaPrincipalId = relPrincipal.persona_id;
+    //   } else if (nueva_persona?.nombre_completo || nueva_persona?.nombre) {
+    //     const nombreCompleto =
+    //       nueva_persona.nombre_completo ||
+    //       nueva_persona.nombre;
 
-        const personaExistente =
-          await buscarPersonaPorNombreCompleto(nombreCompleto);
+    //     const personaExistente =
+    //       await buscarPersonaPorNombreCompleto(nombreCompleto);
 
-        if (!personaExistente) {
-          await t.rollback();
-          return res.status(404).json({
-            ok: false,
-            msg: 'La persona debe estar registrada previamente para confirmación'
-          });
-        }
+    //     if (!personaExistente) {
+    //       await t.rollback();
+    //       return res.status(404).json({
+    //         ok: false,
+    //         msg: 'La persona debe estar registrada previamente para confirmación'
+    //       });
+    //     }
 
-        personaPrincipalId = personaExistente.id_persona;
-      } else {
-        await t.rollback();
-        return res.status(400).json({
-          ok: false,
-          msg: 'Debe enviar persona_id o nombre_completo'
-        });
-      }
+    //     personaPrincipalId = personaExistente.id_persona;
+    //   } else {
+    //     await t.rollback();
+    //     return res.status(400).json({
+    //       ok: false,
+    //       msg: 'Debe enviar persona_id o nombre_completo'
+    //     });
+    //   }
 
-      const tieneBautismo = await validarTieneSacramento(personaPrincipalId, 1);
-      const tienePrimeraComunion = await validarTieneSacramento(personaPrincipalId, 3);
+    //   const tieneBautismo = await validarTieneSacramento(personaPrincipalId, 1);
+    //   const tienePrimeraComunion = await validarTieneSacramento(personaPrincipalId, 3);
 
-      if (!tieneBautismo || !tienePrimeraComunion) {
-        await t.rollback();
-        return res.status(400).json({
-          ok: false,
-          msg: 'La persona debe estar bautizada y haber recibido la primera comunión antes de recibir la confirmación'
-        });
-      }
-    }
+    //   if (!tieneBautismo || !tienePrimeraComunion) {
+    //     await t.rollback();
+    //     return res.status(400).json({
+    //       ok: false,
+    //       msg: 'La persona debe estar bautizada y haber recibido la primera comunión antes de recibir la confirmación'
+    //     });
+    //   }
+    // }
 
     if (tipoSacramento === 2) {
 
@@ -465,13 +465,13 @@ const confirmarOCR = async (req, res = response) => {
         3
       );
 
-    const tieneConfirmacion =
-      await validarTieneSacramento(
-        persona.id_persona,
-        4
-      );
+    // const tieneConfirmacion =
+    //   await validarTieneSacramento(
+    //     persona.id_persona,
+    //     4
+    //   );
 
-    if (!tieneBautismo || !tienePrimeraComunion || !tieneConfirmacion) {
+    if (!tieneBautismo || !tienePrimeraComunion /*|| !tieneConfirmacion*/) {
 
       await t.rollback();
 
