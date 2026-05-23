@@ -64,6 +64,38 @@ const parsers = {
     return datos;
 },
 
+primeracomunion: (texto) => {
+    const datos = { fecha_sacramento: null, foja: null, numero: null, nombre: null, parroquia: null };
+
+    const parroquiaMatch = texto.match(/Parroquia[:\s]+(.+?)(?:\s+Diocesis|$)/im);
+    if (parroquiaMatch) datos.parroquia = parroquiaMatch[1].trim();
+
+    const fojaMatch = texto.match(/Foja:\s*([A-Za-z0-9\-]+)/i);
+    if (fojaMatch) datos.foja = fojaMatch[1].trim();
+
+    const numeroMatch = texto.match(/N[uú]mero:\s*(\d+)/i);
+    if (numeroMatch) datos.numero = numeroMatch[1];
+
+    const nombreMatch = texto.match(/Nombre del comulgado:\s*(.+?)\s*,?\s*nacid[ao]/i);
+    if (nombreMatch) datos.nombre = nombreMatch[1].trim();
+
+    const diaMatch = texto.match(/d[ií]a\s+\w+\s+\((\d{1,2})\)/i);
+    const mesAnioMatch = texto.match(/de\s+(\w+)\s+del\s+año[^(]+\((\d{4})\)/i);
+    if (diaMatch && mesAnioMatch) {
+        const meses = {
+            enero:'01', febrero:'02', marzo:'03', abril:'04',
+            mayo:'05', junio:'06', julio:'07', agosto:'08',
+            septiembre:'09', octubre:'10', noviembre:'11', diciembre:'12'
+        };
+        const dia = diaMatch[1].padStart(2, '0');
+        const mes = meses[mesAnioMatch[1].toLowerCase()] || '01';
+        const anio = mesAnioMatch[2];
+        datos.fecha_sacramento = `${dia}/${mes}/${anio}`;
+    }
+
+    return datos;
+},
+
   matrimonio: (texto) => {
   const textoNorm = texto.replace(/\r\n/g, '\n');
   const textoFlat = textoNorm.replace(/\n/g, ' ').replace(/\s+/g, ' ');
@@ -174,8 +206,9 @@ const parsers = {
 
 const tipoSacramentoMap = {
   1: 'bautismo',
-  2: 'confirmacion',
-  3: 'matrimonio'
+  2: 'primeracomunion',
+  3: 'confirmacion',
+  4: 'matrimonio'
 };
 
 const parsearSegunTipo = (texto, tipoSacramentoId) => {

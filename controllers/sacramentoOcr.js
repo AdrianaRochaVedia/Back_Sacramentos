@@ -338,7 +338,7 @@ const confirmarOCR = async (req, res = response) => {
           await t.rollback();
           return res.status(404).json({
             ok: false,
-            msg: 'La persona debe estar registrada previamente para confirmación'
+            msg: 'La persona debe estar registrada previamente para la primera comunión'
           });
         }
 
@@ -357,12 +357,64 @@ const confirmarOCR = async (req, res = response) => {
         await t.rollback();
         return res.status(400).json({
           ok: false,
-          msg: 'La persona debe estar bautizada antes de recibir la confirmación'
+          msg: 'La persona debe estar bautizada antes de recibir la primera comunión'
         });
       }
     }
 
     if (tipoSacramento === 3) {
+      const relPrincipal = relaciones.find(r => r.rol_sacramento_id === 8);
+
+      if (relPrincipal?.persona_id) {
+        const existe = await Persona.findByPk(relPrincipal.persona_id);
+
+        if (!existe) {
+          await t.rollback();
+          return res.status(404).json({
+            ok: false,
+            msg: 'No se encontró la persona'
+          });
+        }
+
+        personaPrincipalId = relPrincipal.persona_id;
+      } else if (nueva_persona?.nombre_completo || nueva_persona?.nombre) {
+        const nombreCompleto =
+          nueva_persona.nombre_completo ||
+          nueva_persona.nombre;
+
+        const personaExistente =
+          await buscarPersonaPorNombreCompleto(nombreCompleto);
+
+        if (!personaExistente) {
+          await t.rollback();
+          return res.status(404).json({
+            ok: false,
+            msg: 'La persona debe estar registrada previamente para confirmación'
+          });
+        }
+
+        personaPrincipalId = personaExistente.id_persona;
+      } else {
+        await t.rollback();
+        return res.status(400).json({
+          ok: false,
+          msg: 'Debe enviar persona_id o nombre_completo'
+        });
+      }
+
+      const tieneBautismo = await validarTieneSacramento(personaPrincipalId, 1);
+      const tienePrimeraComunion = await validarTieneSacramento(personaPrincipalId, 2);
+
+      if (!tieneBautismo || !tienePrimeraComunion) {
+        await t.rollback();
+        return res.status(400).json({
+          ok: false,
+          msg: 'La persona debe estar bautizada y haber recibido la primera comunión antes de recibir la confirmación'
+        });
+      }
+    }
+
+    if (tipoSacramento === 4) {
 
   const nombresNovios = [
     {
@@ -407,20 +459,26 @@ const confirmarOCR = async (req, res = response) => {
         1
       );
 
-    const tieneConfirmacion =
+    const tienePrimeraComunion =
       await validarTieneSacramento(
         persona.id_persona,
         2
       );
 
-    if (!tieneBautismo || !tieneConfirmacion) {
+    const tieneConfirmacion =
+      await validarTieneSacramento(
+        persona.id_persona,
+        3
+      );
+
+    if (!tieneBautismo || !tienePrimeraComunion || !tieneConfirmacion) {
 
       await t.rollback();
 
       return res.status(400).json({
         ok: false,
         msg:
-          `${novio.nombre_completo} debe tener bautismo y confirmación antes del matrimonio`
+          `${novio.nombre_completo} debe tener bautismo, primera comunión y confirmación antes del matrimonio`
       });
     }
 
@@ -466,7 +524,7 @@ const confirmarOCR = async (req, res = response) => {
       fecha_actualizacion: new Date()
     }, { transaction: t });
 
-    if (tipoSacramento === 3) {
+    if (tipoSacramento === 4) {
         const datosMatrimonio = historico.datos_extraidos || {};
 
         await MatrimonioDetalle.create({
@@ -479,7 +537,7 @@ const confirmarOCR = async (req, res = response) => {
         }, { transaction: t });
     }
 
-    if (tipoSacramento === 3) {
+    if (tipoSacramento === 4) {
       for (const persona of personasMatrimonio) {
         await PersonaSacramento.create({
           persona_id_persona: persona.persona_id,
