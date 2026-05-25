@@ -21,7 +21,6 @@ const app = express();
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const dominioPermitidoRoute = require('./routes/dominioPermitidoRoute');
 const usuarioParroquiaRoute = require('./routes/usuarioParroquia');
-const ocrRoutes = require('./routes/ocrRoute');
 
 app.set('trust proxy', true);
 app.disable('x-powered-by');
