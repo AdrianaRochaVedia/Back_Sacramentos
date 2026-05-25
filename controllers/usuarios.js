@@ -1,4 +1,5 @@
 const { Op } = require('sequelize');
+const { auditarSeguridad } = require('../middlewares/auditarSeguridad');
 const { response } = require('express');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto'); 
@@ -24,6 +25,7 @@ const {
   twoFactorEmail,
   cuentaDesbloqueadaEmail
 } = require('../helpers/emailTemplates');
+const { validarFormatoCorreo } = require('../helpers/validarFormatoCorreo');
 
 const validarDominioCorreo = async (email) => {
   if (!email || !email.includes('@')) return false;
@@ -243,110 +245,149 @@ const getUsuario = async (req, res) => {
 
 
 const crearUsuario = async (req, res) => {
-    const { nombre, apellido_paterno, apellido_materno, email, password, fecha_nacimiento, id_rol, id_parroquia } = req.body;
-    try {
-        const existe = await Usuario.findOne({ where: { email } });
-        if (existe) {
-            return res.status(400).json({ ok: false, msg: 'El email ya está registrado' });
-        }
+  const { nombre, apellido_paterno, apellido_materno, email, password, fecha_nacimiento, id_rol, id_parroquia } = req.body;
 
-        const dominioValido = await validarDominioCorreo(email);
-
-        if (!dominioValido) {
-          return res.status(400).json({
-            ok: false,
-            msg: 'El dominio del correo no está permitido'
-          });
-        }
-
-        let rolExiste = null;
-
-        if (id_rol) {
-            rolExiste = await Rol.findByPk(id_rol);
-            if (!rolExiste) {
-                return res.status(400).json({ ok: false, msg: 'El rol especificado no existe' });
-            }
-        }
-
-        if (id_parroquia) {
-          const Parroquia = require('../models/Parroquia');
-          const parroquiaExiste = await Parroquia.findByPk(id_parroquia);
-          if (!parroquiaExiste) {
-              return res.status(400).json({ ok: false, msg: 'La parroquia especificada no existe' });
-          }
-        } 
-        
-
-        let passwordPlana;
-        if (password && password.trim() !== '') {
-            try {
-                await passwordFuerte(password);
-            } catch (err) {
-                return res.status(400).json({ ok: false, msg: err.message });
-            }
-            passwordPlana = password;
-        } else {
-            passwordPlana = crypto.randomBytes(16).toString('hex') + 'Aa1!';
-        }
-
-        const salt = bcrypt.genSaltSync();
-        const passwordHasheada = bcrypt.hashSync(passwordPlana, salt);
-        const config = await ConfiguracionSeguridad.findOne({ where: { activo: true } });
-        if (!config) {
-            return res.status(500).json({ ok: false, msg: 'No hay configuración de seguridad registrada' });
-        }
-        const fecha_expiracion = new Date();
-        fecha_expiracion.setDate(fecha_expiracion.getDate() + config.vida_util_password_dias);
-
-        const usuario = await Usuario.create({
-            nombre,
-            apellido_paterno,
-            apellido_materno,
-            email,
-            password: passwordHasheada,
-            fecha_nacimiento,
-            id_rol: id_rol || null,
-            id_parroquia: id_parroquia || null,
-            fecha_ultimo_cambio_password: new Date(),
-            fecha_expiracion_password: fecha_expiracion
-        });
-
-        if (id_parroquia) {
-          const rolAsignacion = rolExiste?.nombre || 'SIN_ROL';
-
-          await UsuarioParroquia.create({
-            id_usuario: usuario.id_usuario,
-            id_parroquia,
-            rol_en_parroquia: rolAsignacion,
-            activo: true,
-          });
-        }
-
-        await guardarEnHistorial(usuario.id_usuario, passwordHasheada);
-        const usuarioConRol = await Usuario.findByPk(usuario.id_usuario, {
-            include: [{ model: Rol, as: 'rol', attributes: ['id_rol', 'nombre'] }]
-        });
-
-        const token = await generarJWT(usuario.id_usuario, usuario.email);
-        res.status(201).json({
-            ok: true,
-            usuario: {
-                id_usuario: usuarioConRol.id_usuario,
-                nombre: usuarioConRol.nombre,
-                apellido_paterno: usuarioConRol.apellido_paterno,
-                apellido_materno: usuarioConRol.apellido_materno,
-                email: usuarioConRol.email,
-                fecha_nacimiento: usuarioConRol.fecha_nacimiento,
-                activo: usuarioConRol.activo,
-                rol: usuarioConRol.rol
-            },
-            token
-        });
-
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ ok: false, msg: 'Hable con el administrador' });
+  try {
+    const existe = await Usuario.findOne({ where: { email } });
+    if (existe) {
+      return res.status(400).json({ ok: false, msg: 'El email ya está registrado' });
     }
+
+    const dominioValido = await validarDominioCorreo(email);
+    if (!dominioValido) {
+      return res.status(400).json({ ok: false, msg: 'El dominio del correo no está permitido' });
+    }
+
+    // ── Validación de formato nombre.apellido@dominio ─────────────
+    const formatoValido = validarFormatoEmail({ email, nombre, apellido_paterno, apellido_materno });
+    if (!formatoValido.ok) {
+      return res.status(400).json({ ok: false, msg: formatoValido.msg });
+    }
+
+    // ── Si usa formato con inicial, verificar que realmente existe
+    // otra persona con el mismo nombre y apellido paterno ──────────
+    const [localPart] = email.split('@');
+    const nombreNorm   = localPart.split('.')[0];
+    const apellidoNorm = localPart.split('.')[1];
+    const tieneInicial = localPart.split('.').length === 3;
+
+    if (!tieneInicial) {
+      // Usa formato base → no debe existir ya alguien con mismo nombre+apellido
+      const { Op } = require('sequelize');
+      const colision = await Usuario.findOne({
+        where: {
+          nombre:           { [Op.iLike]: nombre.trim() },
+          apellido_paterno: { [Op.iLike]: apellido_paterno.trim() },
+        }
+      });
+
+      if (colision) {
+        // Ya existe alguien con ese nombre, debe usar el formato con inicial
+        const inicial = apellido_materno
+          ? apellido_materno.trim().charAt(0).toLowerCase()
+          : null;
+
+        const sugerencia = inicial
+          ? `${nombreNorm}.${apellidoNorm}.${inicial}@${email.split('@')[1]}`
+          : null;
+
+        return res.status(400).json({
+          ok: false,
+          msg: `Ya existe un usuario con ese nombre y apellido. ${sugerencia ? `Usa el correo: ${sugerencia}` : 'Agrega la inicial del apellido materno.'}`,
+        });
+      }
+    }
+
+    // ... resto del código sin cambios ...
+    let rolExiste = null;
+
+    if (id_rol) {
+      rolExiste = await Rol.findByPk(id_rol);
+      if (!rolExiste) {
+        return res.status(400).json({ ok: false, msg: 'El rol especificado no existe' });
+      }
+    }
+
+    if (id_parroquia) {
+      const parroquiaExiste = await Parroquia.findByPk(id_parroquia);
+      if (!parroquiaExiste) {
+        return res.status(400).json({ ok: false, msg: 'La parroquia especificada no existe' });
+      }
+    }
+
+    let passwordPlana;
+    if (password && password.trim() !== '') {
+      try {
+        await passwordFuerte(password);
+      } catch (err) {
+        return res.status(400).json({ ok: false, msg: err.message });
+      }
+      passwordPlana = password;
+    } else {
+      passwordPlana = crypto.randomBytes(16).toString('hex') + 'Aa1!';
+    }
+
+    const salt             = bcrypt.genSaltSync();
+    const passwordHasheada = bcrypt.hashSync(passwordPlana, salt);
+    const config           = await ConfiguracionSeguridad.findOne({ where: { activo: true } });
+
+    if (!config) {
+      return res.status(500).json({ ok: false, msg: 'No hay configuración de seguridad registrada' });
+    }
+
+    const fecha_expiracion = new Date();
+    fecha_expiracion.setDate(fecha_expiracion.getDate() + config.vida_util_password_dias);
+
+    const usuario = await Usuario.create({
+      nombre,
+      apellido_paterno,
+      apellido_materno,
+      email,
+      password: passwordHasheada,
+      fecha_nacimiento,
+      id_rol:                       id_rol || null,
+      id_parroquia:                 id_parroquia || null,
+      fecha_ultimo_cambio_password: new Date(),
+      fecha_expiracion_password:    fecha_expiracion
+    });
+
+    if (id_parroquia) {
+      const rolAsignacion = rolExiste?.nombre || 'SIN_ROL';
+      await UsuarioParroquia.create({
+        id_usuario:       usuario.id_usuario,
+        id_parroquia,
+        rol_en_parroquia: rolAsignacion,
+        activo:           true,
+      });
+    }
+
+    await guardarEnHistorial(usuario.id_usuario, passwordHasheada);
+
+    const usuarioConRol = await Usuario.findByPk(usuario.id_usuario, {
+      include: [{ model: Rol, as: 'rol', attributes: ['id_rol', 'nombre'] }]
+    });
+
+    const token = await generarJWT(usuario.id_usuario, usuario.email);
+
+    res.status(201).json({
+      ok: true,
+      usuario: {
+        id_usuario:       usuarioConRol.id_usuario,
+        nombre:           usuarioConRol.nombre,
+        apellido_paterno: usuarioConRol.apellido_paterno,
+        apellido_materno: usuarioConRol.apellido_materno,
+        email:            usuarioConRol.email,
+        fecha_nacimiento: usuarioConRol.fecha_nacimiento,
+        activo:           usuarioConRol.activo,
+        rol:              usuarioConRol.rol
+      },
+      token
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false, msg: 'Hable con el administrador' });
+  }
 };
 
 
@@ -403,31 +444,20 @@ const loginUsuario = async (req, res) => {
   const { email, password, turnstileToken } = req.body;
 
   try {
-    const config = await ConfiguracionSeguridad.findOne({
-      where: { activo: true }
-    });
+    const config = await ConfiguracionSeguridad.findOne({ where: { activo: true } });
 
     if (!config) {
-      return res.status(500).json({
-        ok: false,
-        msg: 'No hay configuración de seguridad registrada'
-      });
+      return res.status(500).json({ ok: false, msg: 'No hay configuración de seguridad registrada' });
     }
 
     const usaCaptcha = config.usa_captcha === true;
 
     if (usaCaptcha) {
       if (!turnstileToken) {
-        return res.status(400).json({
-          ok: false,
-          msg: 'Debe completar la verificación captcha'
-        });
+        return res.status(400).json({ ok: false, msg: 'Debe completar la verificación captcha' });
       }
 
-      const captchaResult = await verifyTurnstileToken({
-        token: turnstileToken,
-        remoteip: req.ip
-      });
+      const captchaResult = await verifyTurnstileToken({ token: turnstileToken, remoteip: req.ip });
 
       if (!captchaResult.ok) {
         return res.status(400).json({
@@ -441,125 +471,115 @@ const loginUsuario = async (req, res) => {
     const usuario = await Usuario.findOne({
       where: { email, activo: true },
       include: [
-        {
-          model: Rol,
-          as: 'rol',
-          attributes: ['id_rol', 'nombre']
-        },
-        {
-          model: Parroquia,
-          as: 'parroquias',
-          attributes: ['id_parroquia', 'nombre'],
-          through: {
-            attributes: [],
-            where: { activo: true }
-          },
-          required: false
-        }
+        { model: Rol,      as: 'rol',       attributes: ['id_rol', 'nombre'] },
+        { model: Parroquia, as: 'parroquias', attributes: ['id_parroquia', 'nombre'],
+          through: { attributes: [], where: { activo: true } }, required: false }
       ]
     });
 
     if (!usuario) {
-      return res.status(400).json({
-        ok: false,
-        msg: 'Usuario no existe'
+      // ── Auditoría: usuario no existe ──────────────────────────
+      await auditarSeguridad({
+        evento:  'LOGIN_FAIL',
+        exitoso: false,
+        username: email,
+        detalle: 'Usuario no existe',
+        req,
       });
+      return res.status(400).json({ ok: false, msg: 'Usuario no existe' });
     }
 
     const parroquiaActiva = usuario.parroquias?.[0] || null;
 
     const bloqueo = await verificarBloqueo(usuario);
     if (bloqueo.bloqueado) {
-      return res.status(403).json({
-        ok: false,
-        msg: bloqueo.msg
+      // ── Auditoría: cuenta bloqueada ───────────────────────────
+      await auditarSeguridad({
+        evento:  'LOGIN_FAIL',
+        exitoso: false,
+        username: email,
+        detalle: bloqueo.msg,
+        req,
       });
+      return res.status(403).json({ ok: false, msg: bloqueo.msg });
     }
 
     const valid = bcrypt.compareSync(password, usuario.password);
 
     if (!valid) {
       const intento = await registrarIntentoFallido(usuario);
-
-      return res.status(400).json({
-        ok: false,
-        msg: intento.msg,
-        bloqueado: intento.bloqueado || false
+      // ── Auditoría: contraseña incorrecta ──────────────────────
+      await auditarSeguridad({
+        evento:  'LOGIN_FAIL',
+        exitoso: false,
+        username: email,
+        detalle: intento.msg,
+        req,
       });
+      return res.status(400).json({ ok: false, msg: intento.msg, bloqueado: intento.bloqueado || false });
     }
 
     const expiracion = verificarExpiracion(usuario);
-
     if (expiracion.expirada) {
-      return res.status(403).json({
-        ok: false,
-        msg: expiracion.msg,
-        passwordExpirada: true
+      // ── Auditoría: password expirada ──────────────────────────
+      await auditarSeguridad({
+        evento:  'LOGIN_FAIL',
+        exitoso: false,
+        username: email,
+        detalle: expiracion.msg,
+        req,
       });
+      return res.status(403).json({ ok: false, msg: expiracion.msg, passwordExpirada: true });
     }
 
     const usa2FA = config.usa_2fa === true;
 
     if (usa2FA) {
-      const codigo = generarCodigo2FA();
+      const codigo  = generarCodigo2FA();
+      const token2FA = await generarToken2FA({ uid: usuario.id_usuario, email: usuario.email, codigo, tipo: '2fa' });
+      const appName  = process.env.APP_NAME || 'Sacramentos';
+      const emailData = twoFactorEmail({ appName, codigo, minutes: 10 });
 
-      const token2FA = await generarToken2FA({
-        uid: usuario.id_usuario,
-        email: usuario.email,
-        codigo,
-        tipo: '2fa'
+      await sendMail({ to: usuario.email, subject: emailData.subject, text: emailData.text, html: emailData.html });
+
+      // ── Auditoría: login pendiente de 2FA (aún no confirmado) ─
+      await auditarSeguridad({
+        evento:  'LOGIN_2FA_ENVIADO',
+        exitoso: false,       // se confirmará en verificarCodigo2FA
+        username: email,
+        detalle: 'Código 2FA enviado al correo',
+        req,
       });
 
-      const appName = process.env.APP_NAME || 'Sacramentos';
-
-      const emailData = twoFactorEmail({
-        appName,
-        codigo,
-        minutes: 10
-      });
-
-      await sendMail({
-        to: usuario.email,
-        subject: emailData.subject,
-        text: emailData.text,
-        html: emailData.html
-      });
-
-      return res.json({
-        ok: true,
-        requiere2FA: true,
-        token2FA,
-        msg: 'Se envió un código de verificación al correo del usuario'
-      });
+      return res.json({ ok: true, requiere2FA: true, token2FA, msg: 'Se envió un código de verificación al correo del usuario' });
     }
 
     await resetearIntentos(usuario);
+
+    // ── Auditoría: login exitoso sin 2FA ──────────────────────
+    await auditarSeguridad({
+      evento:  'LOGIN_OK',
+      exitoso: true,
+      username: email,
+      req,
+    });
 
     const token = await generarJWT(usuario.id_usuario, usuario.email);
 
     return res.json({
       ok: true,
       requiere2FA: false,
-      uid: usuario.id_usuario,
-      email: usuario.email,
+      uid:    usuario.id_usuario,
+      email:  usuario.email,
       nombre: usuario.nombre,
-      rol: usuario.rol,
-      parroquia: parroquiaActiva
-        ? {
-            id_parroquia: parroquiaActiva.id_parroquia,
-            nombre: parroquiaActiva.nombre
-          }
-        : null,
+      rol:    usuario.rol,
+      parroquia: parroquiaActiva ? { id_parroquia: parroquiaActiva.id_parroquia, nombre: parroquiaActiva.nombre } : null,
       token
     });
 
   } catch (err) {
     console.error('Error en loginUsuario:', err);
-
-    return res.status(500).json({
-      ok: false,
-      msg: 'Hable con el administrador'
-    });
+    return res.status(500).json({ ok: false, msg: 'Hable con el administrador' });
   }
 };
 
@@ -568,89 +588,84 @@ const verificarCodigo2FA = async (req, res) => {
 
   try {
     if (!token2FA || !codigo) {
-      return res.status(400).json({
-        ok: false,
-        msg: 'El token temporal y el código son obligatorios'
-      });
+      return res.status(400).json({ ok: false, msg: 'El token temporal y el código son obligatorios' });
     }
 
     const data = verificarToken2FA(token2FA);
 
     if (!data || data.tipo !== '2fa') {
-      return res.status(401).json({
-        ok: false,
-        msg: 'El código expiró. Vuelve a iniciar sesión'
+      // ── Auditoría: token expirado ─────────────────────────────
+      await auditarSeguridad({
+        evento:  'LOGIN_FAIL',
+        exitoso: false,
+        username: data?.email || null,
+        detalle: 'Token 2FA expirado o inválido',
+        req,
       });
+      return res.status(401).json({ ok: false, msg: 'El código expiró. Vuelve a iniciar sesión' });
     }
 
     if (data.codigo !== codigo.trim()) {
-      return res.status(400).json({
-        ok: false,
-        msg: 'Código incorrecto'
+      // ── Auditoría: código incorrecto ──────────────────────────
+      await auditarSeguridad({
+        evento:  'LOGIN_FAIL',
+        exitoso: false,
+        username: data.email,
+        detalle: 'Código 2FA incorrecto',
+        req,
       });
+      return res.status(400).json({ ok: false, msg: 'Código incorrecto' });
     }
 
     const usuario = await Usuario.findOne({
-      where: {
-        id_usuario: data.uid,
-        email: data.email,
-        activo: true
-      },
+      where: { id_usuario: data.uid, email: data.email, activo: true },
       include: [
-        {
-          model: Rol,
-          as: 'rol',
-          attributes: ['id_rol', 'nombre']
-        },
-        {
-          model: Parroquia,
-          as: 'parroquias',
-          attributes: ['id_parroquia', 'nombre'],
-          through: {
-            attributes: [],
-            where: { activo: true }
-          },
-          required: false
-        }
+        { model: Rol,      as: 'rol',       attributes: ['id_rol', 'nombre'] },
+        { model: Parroquia, as: 'parroquias', attributes: ['id_parroquia', 'nombre'],
+          through: { attributes: [], where: { activo: true } }, required: false }
       ]
     });
 
     if (!usuario) {
-      return res.status(400).json({
-        ok: false,
-        msg: 'Usuario no válido'
+      await auditarSeguridad({
+        evento:  'LOGIN_FAIL',
+        exitoso: false,
+        username: data.email,
+        detalle: 'Usuario no válido al verificar 2FA',
+        req,
       });
+      return res.status(400).json({ ok: false, msg: 'Usuario no válido' });
     }
 
     const parroquiaActiva = usuario.parroquias?.[0] || null;
 
     await resetearIntentos(usuario);
 
+    // ── Auditoría: login exitoso con 2FA ──────────────────────
+    await auditarSeguridad({
+      evento:  'LOGIN_OK',
+      exitoso: true,
+      username: data.email,
+      detalle: 'Login completado con 2FA',
+      req,
+    });
+
     const token = await generarJWT(usuario.id_usuario, usuario.email);
 
     return res.json({
       ok: true,
       requiere2FA: false,
-      uid: usuario.id_usuario,
-      email: usuario.email,
+      uid:    usuario.id_usuario,
+      email:  usuario.email,
       nombre: usuario.nombre,
-      rol: usuario.rol,
-      parroquia: parroquiaActiva
-        ? {
-            id_parroquia: parroquiaActiva.id_parroquia,
-            nombre: parroquiaActiva.nombre
-          }
-        : null,
+      rol:    usuario.rol,
+      parroquia: parroquiaActiva ? { id_parroquia: parroquiaActiva.id_parroquia, nombre: parroquiaActiva.nombre } : null,
       token
     });
 
   } catch (error) {
     console.error(error);
-
-    return res.status(500).json({
-      ok: false,
-      msg: 'Error al verificar el código 2FA'
-    });
+    return res.status(500).json({ ok: false, msg: 'Error al verificar el código 2FA' });
   }
 };
 
@@ -732,27 +747,16 @@ const actualizarUsuario = async (req, res = response) => {
         : id_parroquia === null || id_parroquia === ''
           ? []
           : undefined;
-
+    
     if (Array.isArray(parroquiasRecibidas)) {
-      const ids = parroquiasRecibidas.map(Number).filter(Boolean);
-
-      if (ids.length > 0) {
-        const totalParroquias = await Parroquia.count({
-          where: {
-            id_parroquia: {
-              [Op.in]: ids
-            }
-          }
-        });
-
-        if (totalParroquias !== ids.length) {
-          return res.status(400).json({
-            ok: false,
-            msg: 'Una o más parroquias especificadas no existen'
-          });
-        }
-      }
+      await sincronizarUsuarioParroquias({
+        id_usuario:       usuario.id_usuario,
+        id_parroquias:    parroquiasRecibidas,
+        rol_en_parroquia: rolActual?.nombre || 'SIN_ROL',
+      });
     }
+
+    
 
     const updates = {};
 
