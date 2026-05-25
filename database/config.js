@@ -7,7 +7,10 @@ const mustUseSSL =
   (process.env.DB_SSL && ['true', '1', 'yes'].includes(String(process.env.DB_SSL).toLowerCase())) ||
   /neon\.tech/i.test(process.env.DB_HOST || '') ||
   /render\.com/i.test(process.env.DB_HOST || '') ||
-  /aws\.com/i.test(process.env.DB_HOST || '');
+  /amazonaws\.com/i.test(process.env.DB_HOST || '') ||
+  /neon\.tech/i.test(process.env.DATABASE_URL || '') ||
+  /render\.com/i.test(process.env.DATABASE_URL || '') ||
+  /amazonaws\.com/i.test(process.env.DATABASE_URL || '');
 
 const commonOpts = {
   dialect: 'postgres',

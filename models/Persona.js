@@ -50,7 +50,7 @@ const Persona = sequelize.define('Persona', {
   estado: {
     type: DataTypes.STRING(100),
     allowNull: false
-  }
+  },
 
 }, {
   tableName: 'persona',

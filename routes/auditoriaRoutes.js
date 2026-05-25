@@ -3,6 +3,8 @@ const { Op } = require('sequelize');
 const Auditoria = require('../models/Auditoria');
 const Usuario = require('../models/Usuario'); // <--- IMPORTANTE agregado
 const { validarJWT } = require('../middlewares/validar-jwt');
+const { validarPermiso } = require('../middlewares/validarPermiso');
+
 
 const router = Router();
 
@@ -22,7 +24,7 @@ function daysAgo(n) {
 /**
  * GET /api/auditoria
  */
-router.get('/', validarJWT, async (req, res) => {
+router.get('/', validarJWT, validarPermiso('VER_AUDITORIA'), async (req, res) => {
   try {
     let {
       start_date, end_date,
