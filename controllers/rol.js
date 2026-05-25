@@ -185,6 +185,7 @@ const actualizarRol = async (req, res) => {
       updates.activo = activo === true || activo === 'true';
     }
 
+    res.locals._instancia = rol;
     await rol.update(updates);
 
     if (permisos !== undefined) {

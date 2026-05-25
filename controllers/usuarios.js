@@ -25,6 +25,7 @@ const {
   cuentaDesbloqueadaEmail
 } = require('../helpers/emailTemplates');
 const { validarFormatoCorreo } = require('../helpers/validarFormatoCorreo');
+const { sincronizarUsuarioParroquias } = require('../helpers/SincronizacionParroquias');
 
 const validarDominioCorreo = async (email) => {
   if (!email || !email.includes('@')) return false;
@@ -60,12 +61,12 @@ const getUsuarios = async (req, res) => {
     } = req.query;
 
     const camposBusqueda = [
-    'Usuario.nombre',
-    'Usuario.apellido_paterno',
-    'Usuario.apellido_materno',
-    'Usuario.email',
-    'Usuario.fecha_nacimiento'
-  ];
+      'Usuario.nombre',
+      'Usuario.apellido_paterno',
+      'Usuario.apellido_materno',
+      'Usuario.email',
+      'Usuario.fecha_nacimiento',
+    ];
 
     const filtros = {
       nombre,
@@ -724,7 +725,9 @@ const actualizarUsuario = async (req, res = response) => {
       }
     }
 
+    const rolAnteriorId = usuario.id_rol;
     let rolActual = null;
+    let rolAnterior = null;
 
     if (id_rol !== undefined && id_rol !== null && id_rol !== '') {
       rolActual = await Rol.findByPk(id_rol);
@@ -734,6 +737,10 @@ const actualizarUsuario = async (req, res = response) => {
           ok: false,
           msg: 'El rol especificado no existe'
         });
+      }
+
+      if (Number(id_rol) !== Number(rolAnteriorId)) {
+        rolAnterior = await Rol.findByPk(rolAnteriorId);
       }
     } else {
       rolActual = await Rol.findByPk(usuario.id_rol);
@@ -812,7 +819,18 @@ const actualizarUsuario = async (req, res = response) => {
       await guardarEnHistorial(usuario.id_usuario, passwordHasheada);
     }
 
+    res.locals._instancia = usuario;
     await usuario.update(updates);
+
+    if (id_rol !== undefined && id_rol !== null && Number(id_rol) !== Number(rolAnteriorId)) {
+      await auditarSeguridad({
+        evento:   'ROLE_CHANGE',
+        exitoso:  true,
+        username: req.usuario?.email || req.email || usuario.email,
+        detalle:  `Rol cambiado de '${rolAnterior?.nombre || rolAnteriorId}' a '${rolActual?.nombre || id_rol}' para el usuario '${usuario.email}'`,
+        req,
+      });
+    }
 
     if (Array.isArray(parroquiasRecibidas)) {
       const idsNuevos = parroquiasRecibidas.map(Number).filter(Boolean);

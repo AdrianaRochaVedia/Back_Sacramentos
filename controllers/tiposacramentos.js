@@ -123,6 +123,7 @@ const actualizarTipoSacramento = async (req, res = response) => {
         if (nombre !== undefined) updates.nombre = nombre;
         if (descripcion !== undefined) updates.descripcion = descripcion;
 
+        res.locals._instancia = tipo;
         await tipo.update(updates);
         return res.json({
             ok: true,

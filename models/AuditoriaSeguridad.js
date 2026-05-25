@@ -7,7 +7,7 @@ const AuditoriaSeguridad = sequelize.define('AuditoriaSeguridad', {
   username:         { type: DataTypes.STRING(150), allowNull: true },
   evento:           { 
     type: DataTypes.STRING(50), allowNull: false,
-    // LOGIN_OK | LOGIN_FAIL | LOGOUT | PASSWORD_CHANGE | TOKEN_REFRESH | ACCESS_DENIED
+    // LOGIN_OK | LOGIN_FAIL | LOGOUT | PASSWORD_CHANGE | TOKEN_REFRESH | ACCESS_DENIED | ROLE_CHANGE
   },
   exitoso:          { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
   ip_address:       { type: DataTypes.STRING, allowNull: true },
