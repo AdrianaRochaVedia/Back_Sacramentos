@@ -14,7 +14,7 @@ const auditarAplicacion = require('./middlewares/auditarAplicacion');
 const errorHandler      = require('./middlewares/error-handler');
 
 // ── Modelos y relaciones ──────────────────────────────────────────
-require('./models/associations');
+require('./models/Associations');
 
 // ─────────────────────────────────────────────────────────────────
 const app = express();
