@@ -10,6 +10,7 @@ const DominioPermitido = require('../models/DominioPermitido');
 const UsuarioParroquia = require('../models/UsuarioParroquia');
 const Parroquia = require('../models/Parroquia');
 const Permisos = require('../models/Permisos');
+const Modulo = require('../models/Modulo');
 const { generarJWT } = require('../helpers/jwt');
 const { combinarCondiciones } = require('../middlewares/busqueda');
 const { verifyTurnstileToken } = require('../helpers/turnstile');
@@ -20,12 +21,13 @@ const verificarExpiracion = require('../helpers/seguridad/verificarExpiracion');
 const { generarCodigo2FA } = require('../helpers/twoFactorCode');
 const { generarToken2FA, verificarToken2FA } = require('../helpers/twoFactorToken');
 const { sendMail } = require('../helpers/mailer');
-const { sincronizarUsuarioParroquias } = require('../helpers/SincronizacionParroquias');
+const { validarEmailZeroBounce, emailEsEnviable } = require('../helpers/emailValidator');
 const {
   twoFactorEmail,
   cuentaDesbloqueadaEmail
 } = require('../helpers/emailTemplates');
 const { validarFormatoCorreo } = require('../helpers/validarFormatoCorreo');
+const { sincronizarUsuarioParroquias } = require('../helpers/SincronizacionParroquias');
 
 const validarDominioCorreo = async (email) => {
   if (!email || !email.includes('@')) return false;
@@ -61,12 +63,12 @@ const getUsuarios = async (req, res) => {
     } = req.query;
 
     const camposBusqueda = [
-    'Usuario.nombre',
-    'Usuario.apellido_paterno',
-    'Usuario.apellido_materno',
-    'Usuario.email',
-    'Usuario.fecha_nacimiento'
-  ];
+      'Usuario.nombre',
+      'Usuario.apellido_paterno',
+      'Usuario.apellido_materno',
+      'Usuario.email',
+      'Usuario.fecha_nacimiento',
+    ];
 
     const filtros = {
       nombre,
@@ -258,8 +260,24 @@ const crearUsuario = async (req, res) => {
       return res.status(400).json({ ok: false, msg: 'El dominio del correo no está permitido' });
     }
 
+    // ── Validar nombre completo único (case-insensitive) ──────────
+    const whereNombre = {
+      nombre:           { [Op.iLike]: nombre.trim() },
+      apellido_paterno: { [Op.iLike]: apellido_paterno.trim() },
+      apellido_materno: (apellido_materno && apellido_materno.trim())
+        ? { [Op.iLike]: apellido_materno.trim() }
+        : null
+    };
+    const nombreDuplicado = await Usuario.findOne({ where: whereNombre });
+    if (nombreDuplicado) {
+      return res.status(400).json({
+        ok: false,
+        msg: 'Ya existe un usuario con el mismo nombre completo'
+      });
+    }
+
     // ── Validación de formato nombre.apellido@dominio ─────────────
-    const formatoValido = validarFormatoEmail({ email, nombre, apellido_paterno, apellido_materno });
+    const formatoValido = validarFormatoCorreo({ email, nombre, apellido_paterno, apellido_materno });
     if (!formatoValido.ok) {
       return res.status(400).json({ ok: false, msg: formatoValido.msg });
     }
@@ -298,7 +316,15 @@ const crearUsuario = async (req, res) => {
       }
     }
 
-    // ... resto del código sin cambios ...
+    // ── Validar correo con ZeroBounce antes de crear el usuario ──
+    const zbResultado = await validarEmailZeroBounce(email);
+    if (!emailEsEnviable(zbResultado)) {
+      return res.status(400).json({
+        ok: false,
+        msg: 'El correo no es válido o no puede recibir mensajes. Verifica la dirección.'
+      });
+    }
+
     let rolExiste = null;
 
     if (id_rol) {
@@ -725,7 +751,32 @@ const actualizarUsuario = async (req, res = response) => {
       }
     }
 
+    // ── Validar nombre completo único al actualizar (case-insensitive) ──
+    const nombreFinal           = (nombre           ?? usuario.nombre).trim();
+    const apellidoPaternoFinal  = (apellido_paterno  ?? usuario.apellido_paterno).trim();
+    const apellidoMaternoFinal  = apellido_materno !== undefined
+      ? (apellido_materno?.trim() || null)
+      : usuario.apellido_materno;
+
+    const whereNombreEdit = {
+      nombre:           { [Op.iLike]: nombreFinal },
+      apellido_paterno: { [Op.iLike]: apellidoPaternoFinal },
+      apellido_materno: apellidoMaternoFinal
+        ? { [Op.iLike]: apellidoMaternoFinal }
+        : null,
+      id_usuario: { [Op.ne]: id }
+    };
+    const nombreDuplicadoEdit = await Usuario.findOne({ where: whereNombreEdit });
+    if (nombreDuplicadoEdit) {
+      return res.status(400).json({
+        ok: false,
+        msg: 'Ya existe un usuario con el mismo nombre completo'
+      });
+    }
+
+    const rolAnteriorId = usuario.id_rol;
     let rolActual = null;
+    let rolAnterior = null;
 
     if (id_rol !== undefined && id_rol !== null && id_rol !== '') {
       rolActual = await Rol.findByPk(id_rol);
@@ -735,6 +786,10 @@ const actualizarUsuario = async (req, res = response) => {
           ok: false,
           msg: 'El rol especificado no existe'
         });
+      }
+
+      if (Number(id_rol) !== Number(rolAnteriorId)) {
+        rolAnterior = await Rol.findByPk(rolAnteriorId);
       }
     } else {
       rolActual = await Rol.findByPk(usuario.id_rol);
@@ -813,7 +868,18 @@ const actualizarUsuario = async (req, res = response) => {
       await guardarEnHistorial(usuario.id_usuario, passwordHasheada);
     }
 
+    res.locals._instancia = usuario;
     await usuario.update(updates);
+
+    if (id_rol !== undefined && id_rol !== null && Number(id_rol) !== Number(rolAnteriorId)) {
+      await auditarSeguridad({
+        evento:   'ROLE_CHANGE',
+        exitoso:  true,
+        username: req.usuario?.email || req.email || usuario.email,
+        detalle:  `Rol cambiado de '${rolAnterior?.nombre || rolAnteriorId}' a '${rolActual?.nombre || id_rol}' para el usuario '${usuario.email}'`,
+        req,
+      });
+    }
 
     if (Array.isArray(parroquiasRecibidas)) {
       const idsNuevos = parroquiasRecibidas.map(Number).filter(Boolean);
@@ -997,8 +1063,17 @@ const getMisAccesos = async (req, res) => {
             {
               model: Permisos,
               as: 'permisos',
-              attributes: ['id_permiso', 'nombre', 'descripcion'],
-              through: { attributes: [] }
+              attributes: ['id_permiso', 'nombre', 'id_modulo'],
+              through: { attributes: ['visible_en_menu'] },
+              include: [
+                {
+                  model: Modulo,
+                  as: 'modulo',
+                  attributes: ['id_modulo', 'nombre', 'ruta', 'icono'],
+                  where: { activo: true },
+                  required: false
+                }
+              ]
             }
           ]
         }
@@ -1006,82 +1081,46 @@ const getMisAccesos = async (req, res) => {
     });
 
     if (!usuario) {
-      return res.status(404).json({
-        ok: false,
-        msg: 'Usuario no encontrado'
-      });
+      return res.status(404).json({ ok: false, msg: 'Usuario no encontrado' });
     }
 
-    const permisos = usuario.rol?.permisos?.map(p => p.nombre) || [];
+    const permisosDelRol = usuario.rol?.permisos || [];
+    const permisos = permisosDelRol.map(p => p.nombre);
 
-    const MENU_BACKEND = [
-      {
-        permiso: 'VER_PERSONAS',
-        to: '/personas',
-        label: 'Personas',
-        icon: 'group'
-      },
-      {
-        permiso: 'VER_USUARIOS',
-        to: '/usuarios',
-        label: 'Usuarios',
-        icon: 'manage_accounts'
-      },
-      {
-        permiso: 'VER_AUDITORIA',
-        to: '/auditoria',
-        label: 'Auditoría',
-        icon: 'history'
-      },
-      {
-        permiso: 'VER_CONFIG_SEGURIDAD',
-        to: '/configuracion-seguridad',
-        label: 'Configuración de seguridad',
-        icon: 'shield'
-      },
-      {
-        permiso: 'VER_ROLES',
-        to: '/roles-permisos',
-        label: 'Roles y permisos',
-        icon: 'manage_accounts'
-      },
-      {
-        permiso: 'VER_SACRAMENTOS',
-        to: '/sacramentos',
-        label: 'Sacramentos',
-        icon: 'import_contacts'
-      },
-      {
-        permiso: 'VER_REPORTES_GLOBALES',
-        to: '/reportes',
-        label: 'Reportes',
-        icon: 'bar_chart'
-      },
-      {
-        permiso: 'VER_PARROQUIAS',
-        to: '/parroquias',
-        label: 'Parroquias',
-        icon: 'church'
+    // Agrupa los permisos por módulo para construir el menú dinámicamente.
+    // Solo incluye en el menú los permisos marcados con visible_en_menu = true.
+    const modulosMap = new Map();
+    for (const permiso of permisosDelRol) {
+      if (!permiso.modulo) continue;
+      const { id_modulo, nombre, ruta, icono } = permiso.modulo;
+      if (!modulosMap.has(id_modulo)) {
+        modulosMap.set(id_modulo, { label: nombre, to: ruta, icon: icono, permisos: [] });
       }
-    ];
+      modulosMap.get(id_modulo).permisos.push(permiso.nombre);
+    }
 
-    const menu = MENU_BACKEND.filter(item =>
-      permisos.includes(item.permiso)
-    );
+    // Excluye del menú los módulos donde ningún permiso tiene visible_en_menu = true
+    const modulosVisibles = new Set();
+    for (const permiso of permisosDelRol) {
+      if (permiso.RolPermiso?.visible_en_menu && permiso.modulo) {
+        modulosVisibles.add(permiso.modulo.id_modulo);
+      }
+    }
+
+    const menu = [...modulosMap.entries()]
+      .filter(([id_modulo]) => modulosVisibles.has(id_modulo))
+      .map(([, datos]) => datos);
 
     return res.json({
       ok: true,
-      rol: usuario.rol,
+      rol: usuario.rol ? { id_rol: usuario.rol.id_rol, nombre: usuario.rol.nombre } : null,
       permisos,
       menu
     });
 
   } catch (error) {
     console.error('Error al obtener accesos:', error);
-    return res.status(500).json({
-      ok: false,
-      msg: 'Error al obtener accesos'
-    });
+    return res.status(500).json({ ok: false, msg: 'Error al obtener accesos' });
   }
 };
 

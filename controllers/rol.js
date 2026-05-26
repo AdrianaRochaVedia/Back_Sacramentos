@@ -1,4 +1,5 @@
 const { Op } = require('sequelize');
+const { sequelize } = require('../database/config');
 const Rol = require('../models/Rol');
 const Usuario = require('../models/Usuario');
 const Permiso = require('../models/Permisos');
@@ -13,7 +14,7 @@ const getRoles = async (req, res) => {
                 model: Permiso,
                 as: 'permisos',
                 attributes: ['id_permiso', 'nombre'],
-                through: { attributes: ['fecha_registro'] }
+                through: { attributes: ['visible_en_menu', 'fecha_registro'] }
             }],
             order: [['id_rol', 'ASC']]
         });
@@ -37,7 +38,7 @@ const getRolById = async (req, res) => {
                 model: Permiso,
                 as: 'permisos',
                 attributes: ['id_permiso', 'nombre'],
-                through: { attributes: ['fecha_registro'] }
+                through: { attributes: ['visible_en_menu', 'fecha_registro'] }
             }]
         });
 
@@ -97,9 +98,10 @@ const crearRol = async (req, res) => {
 
         const rol = await Rol.create({ nombre, descripcion });
         if (permisos.length > 0) {
-            const rolPermisos = permisos.map(id_permiso => ({
+            const rolPermisos = permisos.map(p => ({
                 id_rol: rol.id_rol,
-                id_permiso
+                id_permiso: typeof p === 'object' ? p.id_permiso : p,
+                visible_en_menu: typeof p === 'object' ? (p.visible_en_menu ?? true) : true
             }));
             await RolPermiso.bulkCreate(rolPermisos);
         }
@@ -109,7 +111,7 @@ const crearRol = async (req, res) => {
                 model: Permiso,
                 as: 'permisos',
                 attributes: ['id_permiso', 'nombre'],
-                through: { attributes: ['fecha_registro'] }
+                through: { attributes: ['visible_en_menu', 'fecha_registro'] }
             }]
         });
 
@@ -185,19 +187,23 @@ const actualizarRol = async (req, res) => {
       updates.activo = activo === true || activo === 'true';
     }
 
+    res.locals._instancia = rol;
     await rol.update(updates);
 
     if (permisos !== undefined) {
-      await RolPermiso.destroy({ where: { id_rol: id } });
+      await sequelize.transaction(async (t) => {
+        await RolPermiso.destroy({ where: { id_rol: id }, transaction: t });
 
-      if (permisos.length > 0) {
-        const rolPermisos = permisos.map((id_permiso) => ({
-          id_rol: parseInt(id),
-          id_permiso
-        }));
+        if (permisos.length > 0) {
+          const rolPermisos = permisos.map(p => ({
+            id_rol: parseInt(id),
+            id_permiso: typeof p === 'object' ? p.id_permiso : p,
+            visible_en_menu: typeof p === 'object' ? (p.visible_en_menu ?? true) : true
+          }));
 
-        await RolPermiso.bulkCreate(rolPermisos);
-      }
+          await RolPermiso.bulkCreate(rolPermisos, { transaction: t });
+        }
+      });
     }
 
     const rolActualizado = await Rol.findByPk(id, {
@@ -206,7 +212,7 @@ const actualizarRol = async (req, res) => {
           model: Permiso,
           as: 'permisos',
           attributes: ['id_permiso', 'nombre'],
-          through: { attributes: ['fecha_registro'] }
+          through: { attributes: ['visible_en_menu', 'fecha_registro'] }
         }
       ]
     });

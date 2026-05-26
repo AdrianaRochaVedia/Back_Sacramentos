@@ -9,6 +9,10 @@ const MODELOS_AUDITADOS = [
   'DominioPermitido',
   'Rol',
   'RolPermiso',
+  'TipoSacramento',
+  'RolSacramento',
+  'Permisos',
+  'MatrizRiesgo',
 ];
 
 function registrarHooks(modelo) {

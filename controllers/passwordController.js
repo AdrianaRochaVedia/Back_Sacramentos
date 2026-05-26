@@ -46,7 +46,7 @@ exports.solicitar = async (req, res) => {
       const tpl      = resetPasswordEmail({ appName, resetUrl: url, minutes: TOKEN_TTL_MINUTES });
       await sendMail({ to: email, subject: tpl.subject, html: tpl.html, text: tpl.text });
     } catch (mailErr) {
-      console.warn('Error enviando email de reset:', mailErr?.message || mailErr);
+      return res.status(400).json({ ok: false, msg: 'No se pudo enviar el correo de recuperación. Verifica que la dirección sea válida.' });
     }
 
     // ── Auditoría ────────────────────────────────────────────────
