@@ -809,9 +809,14 @@ const actualizarUsuario = async (req, res = response) => {
         id_parroquias:    parroquiasRecibidas,
         rol_en_parroquia: rolActual?.nombre || 'SIN_ROL',
       });
+    } else if (rolAnterior) {
+      // El rol cambió pero no se enviaron parroquias nuevas:
+      // desactivar todas las relaciones activas del rol anterior
+      await UsuarioParroquia.update(
+        { activo: false, fecha_fin: new Date() },
+        { where: { id_usuario: usuario.id_usuario, activo: true } }
+      );
     }
-
-    
 
     const updates = {};
 
