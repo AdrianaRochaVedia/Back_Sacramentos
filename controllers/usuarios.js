@@ -1016,7 +1016,7 @@ const getMisAccesos = async (req, res) => {
               model: Permisos,
               as: 'permisos',
               attributes: ['id_permiso', 'nombre', 'id_modulo'],
-              through: { attributes: [] },
+              through: { attributes: ['visible_en_menu'] },
               include: [
                 {
                   model: Modulo,
@@ -1039,7 +1039,8 @@ const getMisAccesos = async (req, res) => {
     const permisosDelRol = usuario.rol?.permisos || [];
     const permisos = permisosDelRol.map(p => p.nombre);
 
-    // Agrupa los permisos por módulo para construir el menú dinámicamente
+    // Agrupa los permisos por módulo para construir el menú dinámicamente.
+    // Solo incluye en el menú los permisos marcados con visible_en_menu = true.
     const modulosMap = new Map();
     for (const permiso of permisosDelRol) {
       if (!permiso.modulo) continue;
@@ -1050,7 +1051,17 @@ const getMisAccesos = async (req, res) => {
       modulosMap.get(id_modulo).permisos.push(permiso.nombre);
     }
 
-    const menu = [...modulosMap.values()];
+    // Excluye del menú los módulos donde ningún permiso tiene visible_en_menu = true
+    const modulosVisibles = new Set();
+    for (const permiso of permisosDelRol) {
+      if (permiso.RolPermiso?.visible_en_menu && permiso.modulo) {
+        modulosVisibles.add(permiso.modulo.id_modulo);
+      }
+    }
+
+    const menu = [...modulosMap.entries()]
+      .filter(([id_modulo]) => modulosVisibles.has(id_modulo))
+      .map(([, datos]) => datos);
 
     return res.json({
       ok: true,
