@@ -1,0 +1,76 @@
+const { Router } = require('express');
+const { check } = require('express-validator');
+const { validarCampos } = require('../middlewares/validar-campos');
+const { validarJWT } = require('../middlewares/validar-jwt');
+const { validarPermiso } = require('../middlewares/validarPermiso');
+const { procesarOCR, confirmarOCR, getHistoricoOCR, rechazarOCR, confirmarParroquiaOCR, crearYConfirmarParroquiaOCR } = require('../controllers/sacramentoOcr');
+const multer = require('multer');
+
+const upload = multer({ dest: 'uploads/' });
+
+const router = Router();
+
+router.post(
+    '/preview',
+    validarJWT,
+    validarPermiso('CREAR_SACRAMENTO'),
+    upload.single('imagen'),
+    [
+        check('tipo_sacramento_id', 'El tipo de sacramento es obligatorio').isInt(),
+        check('institucion_parroquia_id').optional().isInt(),
+        validarCampos
+    ],
+    procesarOCR
+);
+
+router.post(
+    '/confirmar',
+    validarJWT,
+    validarPermiso('CREAR_SACRAMENTO'),
+    [
+        check('historico_id', 'El historico_id es obligatorio').isInt(),
+        check('fecha_sacramento', 'La fecha del sacramento es obligatoria').notEmpty(),
+        check('foja', 'La foja es obligatoria').not().isEmpty(),
+        check('numero', 'El número es obligatorio').isInt(),
+        check('relaciones').optional().isArray().withMessage('relaciones debe ser un array'),
+        validarCampos
+    ],
+    confirmarOCR
+);
+
+router.get(
+    '/historico',
+    validarJWT,
+    validarPermiso('VER_SACRAMENTOS'),
+    getHistoricoOCR
+);
+
+router.put(
+    '/rechazar/:id',
+    validarJWT,
+    validarPermiso('EDITAR_SACRAMENTO'),
+    rechazarOCR
+);
+
+router.put(
+    '/parroquia/:id',
+    validarJWT,
+    validarPermiso('EDITAR_SACRAMENTO'),
+    confirmarParroquiaOCR
+);
+
+router.post(
+    '/parroquia/crear/:id',
+    validarJWT,
+    validarPermiso('EDITAR_SACRAMENTO'),
+    [
+        check('nombre_parroquia', 'El nombre de la parroquia es obligatorio').not().isEmpty(),
+        check('direccion').optional().not().isEmpty(),
+        check('telefono').optional().not().isEmpty(),
+        check('email').optional().isEmail(),
+        validarCampos
+    ],
+    crearYConfirmarParroquiaOCR
+);
+
+module.exports = router;
