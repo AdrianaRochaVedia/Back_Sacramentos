@@ -213,6 +213,7 @@ const actualizarSacramento = async (req, res) => {
       return res.status(400).json({ ok:false, msg:'No se enviaron campos a actualizar' });
     }
 
+    res.locals._instancia = sacramento;
     const sacramentoActualizado = await sacramento.update(updates);
 
     return res.json({
@@ -243,6 +244,7 @@ const eliminarSacramento = async (req, res = response) => {
             });
         }
 
+        res.locals._instancia = sacramento;
         await sacramento.update({ activo: false });
 
         res.json({
@@ -291,10 +293,10 @@ const crearSacramentoCompleto = async (req, res) => {
 
     console.error('Error al crear sacramento completo:', error);
 
-    return res.status(500).json({
-      ok: false,
-      msg: error.message || 'Error al crear sacramento',
-    });
+    return res.status(400).json({
+    ok: false,
+    msg: error.message || 'Error al crear sacramento',
+  });
   }
 };
 // para buscar sacramento por la persona que lo recibió

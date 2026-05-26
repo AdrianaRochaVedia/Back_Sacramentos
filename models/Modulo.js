@@ -1,9 +1,9 @@
-// models/Permisos.js
+// models/Modulo.js
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../database/config');
 
-const Permiso = sequelize.define('Permiso', {
-  id_permiso: {
+const Modulo = sequelize.define('Modulo', {
+  id_modulo: {
     type: DataTypes.INTEGER,
     primaryKey: true,
     autoIncrement: true,
@@ -16,16 +16,15 @@ const Permiso = sequelize.define('Permiso', {
   },
   descripcion: {
     type: DataTypes.TEXT,
-    allowNull: false
+    allowNull: true
   },
-  id_modulo: {
-    type: DataTypes.INTEGER,
-    allowNull: true,
-    references: {
-      model: 'modulo',
-      key: 'id_modulo'
-    },
-    onDelete: 'SET NULL'
+  ruta: {
+    type: DataTypes.STRING(100),
+    allowNull: true
+  },
+  icono: {
+    type: DataTypes.STRING(50),
+    allowNull: true
   },
   activo: {
     type: DataTypes.BOOLEAN,
@@ -36,12 +35,10 @@ const Permiso = sequelize.define('Permiso', {
     type: DataTypes.DATE,
     allowNull: false,
     defaultValue: DataTypes.NOW
-  },
-  
+  }
 }, {
-  tableName: 'permiso',
+  tableName: 'modulo',
   timestamps: false
 });
 
-module.exports = Permiso;
-
+module.exports = Modulo;

@@ -126,10 +126,12 @@ app.use('/api/dashboard',               require('./routes/dashboardRoutes'));
 app.use('/api/password',                require('./routes/passwordRoutes'));
 app.use('/api/rol',                     require('./routes/rolRoute'));
 app.use('/api/permiso',                 require('./routes/permisoRoute'));
+app.use('/api/modulo',                  require('./routes/moduloRoute'));
 app.use('/api/configuracion-seguridad', require('./routes/configuracionSeguridadRoute'));
-app.use('/api/dominio-permitido', dominioPermitidoRoute);
-app.use('/api/usuario-parroquia', usuarioParroquiaRoute);
 app.use('/api/ocr', require('./routes/sacramentoOcr'));
+app.use('/api/dominio-permitido',       require('./routes/dominioPermitidoRoute'));
+app.use('/api/usuario-parroquia',       require('./routes/usuarioParroquia'));
+app.use('/api/riesgos', require('./routes/riesgos'));
 
 app.get('/api/proxy-pdf', async (req, res) => {
   const { url, name = 'documento.pdf' } = req.query;

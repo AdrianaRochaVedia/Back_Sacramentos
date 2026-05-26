@@ -1,11 +1,10 @@
 const Sacramento = require('../models/Sacramento');
 
-const { validarRelaciones } = require('../helpers/sacramentoValidations');
+const { validarRelaciones, validarFechasSacramento } = require('../helpers/sacramentoValidations');
 const {
   crearRelacionesSacramento,
   sincronizarRelacionesSacramento,
 } = require('./personaSacramento.service');
-
 const {
   crearOActualizarMatrimonioDetalle,
 } = require('./matrimonioDetalle.service');
@@ -27,7 +26,11 @@ const crearSacramentoCompletoService = async ({
     matrimonioDetalle,
   } = data;
 
+  // Validaciones de formato
   validarRelaciones(relaciones);
+
+  // Validaciones de lógica y fechas (asíncrona — consulta la BD)
+  await validarFechasSacramento({ tipo_sacramento_id_tipo, fecha_sacramento, relaciones });
 
   const sacramento = await Sacramento.create(
     {
@@ -81,13 +84,14 @@ const actualizarSacramentoCompletoService = async ({
     relaciones = JSON.parse(relaciones);
   }
 
+  // Validaciones de formato
   validarRelaciones(relaciones);
 
+  // Validaciones de lógica y fechas
+  await validarFechasSacramento({ tipo_sacramento_id_tipo, fecha_sacramento, relaciones });
+
   const sacramento = await Sacramento.findOne({
-    where: {
-      id_sacramento,
-      activo: true,
-    },
+    where: { id_sacramento, activo: true },
     transaction,
   });
 
