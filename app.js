@@ -129,7 +129,7 @@ app.use('/api/configuracion-seguridad', require('./routes/configuracionSeguridad
 app.use('/api/dominio-permitido', dominioPermitidoRoute);
 app.use('/api/usuario-parroquia', usuarioParroquiaRoute);
 app.use('/api/ocr', require('./routes/sacramentoOcr'));
-
+app.use('/api/test', require('./routes/test.routes'));
 app.get('/api/proxy-pdf', async (req, res) => {
   const { url, name = 'documento.pdf' } = req.query;
 
