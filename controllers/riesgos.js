@@ -7,18 +7,23 @@ const getRiesgos = async (req, res) => {
   try {
     const { nivel, activo_info, page = 1, limit = 50 } = req.query;
     const where = { activo: true };
- 
+
     if (nivel)      where.nivel_riesgo_inherente = nivel;
     if (activo_info) where.activo_info = { [Op.iLike]: `%${activo_info}%` };
- 
+
     const offset = (page - 1) * limit;
     const { count, rows } = await MatrizRiesgo.findAndCountAll({
       where,
       order: [['numero', 'ASC']],
       limit: Number(limit),
       offset,
+      include: [{
+        model: Usuario,
+        as: 'usuario',
+        attributes: ['nombre', 'apellido_paterno', 'apellido_materno', 'email'],
+      }],
     });
- 
+
     return res.json({
       ok: true,
       riesgos: rows,
@@ -35,10 +40,16 @@ const getRiesgos = async (req, res) => {
 // GET /api/riesgos/:id
 const getRiesgoById = async (req, res) => {
   try {
-    const riesgo = await MatrizRiesgo.findByPk(req.params.id);
+    const riesgo = await MatrizRiesgo.findByPk(req.params.id, {
+      include: [{
+        model: Usuario,
+        as: 'usuario',
+        attributes: ['nombre', 'apellido_paterno', 'apellido_materno', 'email'],
+      }],
+    });
     if (!riesgo || !riesgo.activo)
       return res.status(404).json({ ok: false, msg: 'Riesgo no encontrado' });
-    return res.json({ ok: true, riesgo: { ...riesgo.dataValues, usuario: riesgo.usuario } });
+    return res.json({ ok: true, riesgo });
   } catch (error) {
     return res.status(500).json({ ok: false, msg: 'Error al obtener riesgo' });
   }

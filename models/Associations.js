@@ -18,6 +18,9 @@ const Modulo                = require('./Modulo');
 Modulo.hasMany(Permisos,  { foreignKey: 'id_modulo', as: 'permisos' });
 Permisos.belongsTo(Modulo, { foreignKey: 'id_modulo', as: 'modulo' });
 
+MatrizRiesgo.belongsTo(Usuario, { foreignKey: 'usuario_id', as: 'usuario' });
+Usuario.hasMany(MatrizRiesgo,   { foreignKey: 'usuario_id', as: 'riesgos' });
+
 Usuario.belongsTo(Rol,           { foreignKey: 'id_rol',        as: 'rol' });
 Rol.hasMany(Usuario,             { foreignKey: 'id_rol',        as: 'usuarios' });
 
