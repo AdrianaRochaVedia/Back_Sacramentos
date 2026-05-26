@@ -29,6 +29,8 @@ const {
 const { validarFormatoCorreo } = require('../helpers/validarFormatoCorreo');
 const { sincronizarUsuarioParroquias } = require('../helpers/SincronizacionParroquias');
 
+const ROLES_CON_PARROQUIA = ['PARROCO', 'SECRETARIO_PARROQUIAL'];
+
 const validarDominioCorreo = async (email) => {
   if (!email || !email.includes('@')) return false;
 
@@ -381,12 +383,11 @@ const crearUsuario = async (req, res) => {
       fecha_expiracion_password:    fecha_expiracion
     });
 
-    if (id_parroquia) {
-      const rolAsignacion = rolExiste?.nombre || 'SIN_ROL';
+    if (id_parroquia && ROLES_CON_PARROQUIA.includes(rolExiste?.nombre)) {
       await UsuarioParroquia.create({
         id_usuario:       usuario.id_usuario,
         id_parroquia,
-        rol_en_parroquia: rolAsignacion,
+        rol_en_parroquia: rolExiste.nombre,
         activo:           true,
       });
     }
@@ -807,19 +808,21 @@ const actualizarUsuario = async (req, res = response) => {
           ? []
           : undefined;
     
-    if (Array.isArray(parroquiasRecibidas)) {
-      await sincronizarUsuarioParroquias({
-        id_usuario:       usuario.id_usuario,
-        id_parroquias:    parroquiasRecibidas,
-        rol_en_parroquia: rolActual?.nombre || 'SIN_ROL',
-      });
-    } else if (rolAnterior) {
-      // El rol cambió pero no se enviaron parroquias nuevas:
-      // desactivar todas las relaciones activas del rol anterior
+    if (rolAnterior) {
       await UsuarioParroquia.update(
         { activo: false, fecha_fin: new Date() },
         { where: { id_usuario: usuario.id_usuario, activo: true } }
       );
+    }
+
+    const nuevoRolNecesitaParroquia = ROLES_CON_PARROQUIA.includes(rolActual?.nombre);
+
+    if (nuevoRolNecesitaParroquia && Array.isArray(parroquiasRecibidas)) {
+      await sincronizarUsuarioParroquias({
+        id_usuario:       usuario.id_usuario,
+        id_parroquias:    parroquiasRecibidas,
+        rol_en_parroquia: rolActual?.nombre,
+      });
     }
 
     const updates = {};
@@ -890,7 +893,7 @@ const actualizarUsuario = async (req, res = response) => {
       });
     }
 
-    if (Array.isArray(parroquiasRecibidas)) {
+    if (nuevoRolNecesitaParroquia && Array.isArray(parroquiasRecibidas)) {
       const idsNuevos = parroquiasRecibidas.map(Number).filter(Boolean);
 
       await UsuarioParroquia.update(
@@ -919,7 +922,7 @@ const actualizarUsuario = async (req, res = response) => {
 
         if (relacion) {
           await relacion.update({
-            rol_en_parroquia: rolActual?.nombre || 'SIN_ROL',
+            rol_en_parroquia: rolActual?.nombre,
             activo: true,
             fecha_fin: null
           });
@@ -927,7 +930,7 @@ const actualizarUsuario = async (req, res = response) => {
           await UsuarioParroquia.create({
             id_usuario: usuario.id_usuario,
             id_parroquia: idParroquia,
-            rol_en_parroquia: rolActual?.nombre || 'SIN_ROL',
+            rol_en_parroquia: rolActual?.nombre,
             activo: true
           });
         }
