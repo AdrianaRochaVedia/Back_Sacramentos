@@ -1,4 +1,5 @@
 const { Op } = require('sequelize');
+const { sequelize } = require('../database/config');
 const Rol = require('../models/Rol');
 const Usuario = require('../models/Usuario');
 const Permiso = require('../models/Permisos');
@@ -99,7 +100,7 @@ const crearRol = async (req, res) => {
         if (permisos.length > 0) {
             const rolPermisos = permisos.map(p => ({
                 id_rol: rol.id_rol,
-                id_permiso: typeof p === 'object' ? p.id : p,
+                id_permiso: typeof p === 'object' ? p.id_permiso : p,
                 visible_en_menu: typeof p === 'object' ? (p.visible_en_menu ?? true) : true
             }));
             await RolPermiso.bulkCreate(rolPermisos);
@@ -190,17 +191,19 @@ const actualizarRol = async (req, res) => {
     await rol.update(updates);
 
     if (permisos !== undefined) {
-      await RolPermiso.destroy({ where: { id_rol: id } });
+      await sequelize.transaction(async (t) => {
+        await RolPermiso.destroy({ where: { id_rol: id }, transaction: t });
 
-      if (permisos.length > 0) {
-        const rolPermisos = permisos.map(p => ({
-          id_rol: parseInt(id),
-          id_permiso: typeof p === 'object' ? p.id : p,
-          visible_en_menu: typeof p === 'object' ? (p.visible_en_menu ?? true) : true
-        }));
+        if (permisos.length > 0) {
+          const rolPermisos = permisos.map(p => ({
+            id_rol: parseInt(id),
+            id_permiso: typeof p === 'object' ? p.id_permiso : p,
+            visible_en_menu: typeof p === 'object' ? (p.visible_en_menu ?? true) : true
+          }));
 
-        await RolPermiso.bulkCreate(rolPermisos);
-      }
+          await RolPermiso.bulkCreate(rolPermisos, { transaction: t });
+        }
+      });
     }
 
     const rolActualizado = await Rol.findByPk(id, {

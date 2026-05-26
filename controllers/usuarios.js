@@ -21,6 +21,7 @@ const verificarExpiracion = require('../helpers/seguridad/verificarExpiracion');
 const { generarCodigo2FA } = require('../helpers/twoFactorCode');
 const { generarToken2FA, verificarToken2FA } = require('../helpers/twoFactorToken');
 const { sendMail } = require('../helpers/mailer');
+const { validarEmailZeroBounce, emailEsEnviable } = require('../helpers/emailValidator');
 const {
   twoFactorEmail,
   cuentaDesbloqueadaEmail
@@ -259,6 +260,22 @@ const crearUsuario = async (req, res) => {
       return res.status(400).json({ ok: false, msg: 'El dominio del correo no está permitido' });
     }
 
+    // ── Validar nombre completo único (case-insensitive) ──────────
+    const whereNombre = {
+      nombre:           { [Op.iLike]: nombre.trim() },
+      apellido_paterno: { [Op.iLike]: apellido_paterno.trim() },
+      apellido_materno: (apellido_materno && apellido_materno.trim())
+        ? { [Op.iLike]: apellido_materno.trim() }
+        : null
+    };
+    const nombreDuplicado = await Usuario.findOne({ where: whereNombre });
+    if (nombreDuplicado) {
+      return res.status(400).json({
+        ok: false,
+        msg: 'Ya existe un usuario con el mismo nombre completo'
+      });
+    }
+
     // ── Validación de formato nombre.apellido@dominio ─────────────
     const formatoValido = validarFormatoCorreo({ email, nombre, apellido_paterno, apellido_materno });
     if (!formatoValido.ok) {
@@ -299,7 +316,15 @@ const crearUsuario = async (req, res) => {
       }
     }
 
-    // ... resto del código sin cambios ...
+    // ── Validar correo con ZeroBounce antes de crear el usuario ──
+    const zbResultado = await validarEmailZeroBounce(email);
+    if (!emailEsEnviable(zbResultado)) {
+      return res.status(400).json({
+        ok: false,
+        msg: 'El correo no es válido o no puede recibir mensajes. Verifica la dirección.'
+      });
+    }
+
     let rolExiste = null;
 
     if (id_rol) {
@@ -724,6 +749,29 @@ const actualizarUsuario = async (req, res = response) => {
           msg: 'El email ya está en uso'
         });
       }
+    }
+
+    // ── Validar nombre completo único al actualizar (case-insensitive) ──
+    const nombreFinal           = (nombre           ?? usuario.nombre).trim();
+    const apellidoPaternoFinal  = (apellido_paterno  ?? usuario.apellido_paterno).trim();
+    const apellidoMaternoFinal  = apellido_materno !== undefined
+      ? (apellido_materno?.trim() || null)
+      : usuario.apellido_materno;
+
+    const whereNombreEdit = {
+      nombre:           { [Op.iLike]: nombreFinal },
+      apellido_paterno: { [Op.iLike]: apellidoPaternoFinal },
+      apellido_materno: apellidoMaternoFinal
+        ? { [Op.iLike]: apellidoMaternoFinal }
+        : null,
+      id_usuario: { [Op.ne]: id }
+    };
+    const nombreDuplicadoEdit = await Usuario.findOne({ where: whereNombreEdit });
+    if (nombreDuplicadoEdit) {
+      return res.status(400).json({
+        ok: false,
+        msg: 'Ya existe un usuario con el mismo nombre completo'
+      });
     }
 
     const rolAnteriorId = usuario.id_rol;

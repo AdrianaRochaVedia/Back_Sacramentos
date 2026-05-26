@@ -1,5 +1,6 @@
 const { Op } = require('sequelize');
 const MatrizRiesgo = require('../models/MatrizRiesgo');
+const Usuario = require('../models/Usuario');
  
 // GET /api/riesgos
 const getRiesgos = async (req, res) => {
@@ -37,7 +38,7 @@ const getRiesgoById = async (req, res) => {
     const riesgo = await MatrizRiesgo.findByPk(req.params.id);
     if (!riesgo || !riesgo.activo)
       return res.status(404).json({ ok: false, msg: 'Riesgo no encontrado' });
-    return res.json({ ok: true, riesgo });
+    return res.json({ ok: true, riesgo: { ...riesgo.dataValues, usuario: riesgo.usuario } });
   } catch (error) {
     return res.status(500).json({ ok: false, msg: 'Error al obtener riesgo' });
   }

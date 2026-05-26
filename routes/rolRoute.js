@@ -14,7 +14,11 @@ router.get('/:id', validarJWT, validarPermiso('VER_ROLES'), getRolById);
 router.post('/new', validarJWT, validarPermiso('CREAR_ROL'), [
     check('nombre', 'El nombre es obligatorio').not().isEmpty(),
     check('permisos', 'Los permisos deben ser un arreglo').optional().isArray(),
-    check('permisos.*', 'Cada permiso debe ser un número entero').optional().isInt(),
+    check('permisos.*').optional().custom(val => {
+        if (Number.isInteger(val)) return true;
+        if (val && Number.isInteger(val.id_permiso)) return true;
+        throw new Error('Cada permiso debe ser un entero o { id_permiso, visible_en_menu }');
+    }),
     validarCampos
 ], crearRol);
 
@@ -22,7 +26,11 @@ router.put('/:id', validarJWT, validarPermiso('EDITAR_ROL'), [
     check('id', 'El ID debe ser un número válido').isInt(),
     check('nombre').optional().trim().notEmpty(),
     check('permisos', 'Los permisos deben ser un arreglo').optional().isArray(),
-    check('permisos.*', 'Cada permiso debe ser un número entero').optional().isInt(),
+    check('permisos.*').optional().custom(val => {
+        if (Number.isInteger(val)) return true;
+        if (val && Number.isInteger(val.id_permiso)) return true;
+        throw new Error('Cada permiso debe ser un entero o { id_permiso, visible_en_menu }');
+    }),
     validarCampos
 ], actualizarRol);
 
