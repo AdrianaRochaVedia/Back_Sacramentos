@@ -50,3 +50,5 @@ const sincronizarUsuarioParroquias = async ({
     }
   }
 };
+
+module.exports = { sincronizarUsuarioParroquias };

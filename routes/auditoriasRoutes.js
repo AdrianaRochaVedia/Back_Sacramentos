@@ -61,7 +61,7 @@ function paginacion(query) {
 
 // ─── GET /api/auditoria/aplicacion ────────────────────────────────────────────
 
-router.get('/aplicacion', validarJWT, validarPermiso('VER_AUDITORIA'), async (req, res) => {
+router.get('/aplicacion', validarJWT, validarPermiso('VER_AUDITORIA_APLICACION'), async (req, res) => {
   try {
     const {
       start_date, end_date,
@@ -149,7 +149,7 @@ router.get('/aplicacion', validarJWT, validarPermiso('VER_AUDITORIA'), async (re
 // ─── GET /api/auditoria/aplicacion/:id ────────────────────────────────────────
 // Detalle de un registro, incluye dato_anterior, dato_nuevo y campos_modificados
 
-router.get('/aplicacion/:id', validarJWT, validarPermiso('VER_AUDITORIA'), async (req, res) => {
+router.get('/aplicacion/:id', validarJWT, validarPermiso('VER_AUDITORIA_APLICACION'), async (req, res) => {
   try {
     const registro = await AuditoriaAplicacion.findByPk(req.params.id);
     if (!registro) return res.status(404).json({ ok: false, msg: 'Registro no encontrado' });
@@ -172,7 +172,7 @@ router.get('/aplicacion/:id', validarJWT, validarPermiso('VER_AUDITORIA'), async
 
 // ─── GET /api/auditoria/seguridad ─────────────────────────────────────────────
 
-router.get('/seguridad', validarJWT, validarPermiso('VER_AUDITORIA'), async (req, res) => {
+router.get('/seguridad', validarJWT, validarPermiso('VER_AUDITORIA_SEGURIDAD'), async (req, res) => {
   try {
     const {
       start_date, end_date,
