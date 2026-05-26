@@ -18,8 +18,8 @@ function validarFormatoCorreo({ email, nombre, apellido_paterno, apellido_matern
     return { ok: false, msg: 'Formato de correo inválido' };
   }
 
-  const nombreNorm   = normalizar(nombre);
-  const apellidoNorm = normalizar(apellido_paterno);
+  const nombreNorm   = normalizar(nombre.trim().split(/\s+/)[0]);
+  const apellidoNorm = normalizar(apellido_paterno.trim().split(/\s+/)[0]);
   const inicialMaterno = apellido_materno
     ? normalizar(apellido_materno).charAt(0)
     : null;

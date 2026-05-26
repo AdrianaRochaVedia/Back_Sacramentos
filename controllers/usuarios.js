@@ -290,11 +290,15 @@ const crearUsuario = async (req, res) => {
     const tieneInicial = localPart.split('.').length === 3;
 
     if (!tieneInicial) {
-      // Usa formato base → no debe existir ya alguien con mismo nombre+apellido
+      // Usa formato base → no debe existir ya alguien con mismo primer nombre+apellido paterno
       const { Op } = require('sequelize');
+      const primerNombre = nombre.trim().split(/\s+/)[0];
       const colision = await Usuario.findOne({
         where: {
-          nombre:           { [Op.iLike]: nombre.trim() },
+          [Op.or]: [
+            { nombre: { [Op.iLike]: primerNombre } },
+            { nombre: { [Op.iLike]: `${primerNombre} %` } }
+          ],
           apellido_paterno: { [Op.iLike]: apellido_paterno.trim() },
         }
       });
