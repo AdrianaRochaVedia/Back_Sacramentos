@@ -121,6 +121,7 @@ app.use('/api/dashboard',               require('./routes/dashboardRoutes'));
 app.use('/api/password',                require('./routes/passwordRoutes'));
 app.use('/api/rol',                     require('./routes/rolRoute'));
 app.use('/api/permiso',                 require('./routes/permisoRoute'));
+app.use('/api/modulo',                  require('./routes/moduloRoute'));
 app.use('/api/configuracion-seguridad', require('./routes/configuracionSeguridadRoute'));
 app.use('/api/dominio-permitido',       require('./routes/dominioPermitidoRoute'));
 app.use('/api/usuario-parroquia',       require('./routes/usuarioParroquia'));

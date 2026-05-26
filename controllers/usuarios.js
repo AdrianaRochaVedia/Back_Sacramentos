@@ -10,6 +10,7 @@ const DominioPermitido = require('../models/DominioPermitido');
 const UsuarioParroquia = require('../models/UsuarioParroquia');
 const Parroquia = require('../models/Parroquia');
 const Permisos = require('../models/Permisos');
+const Modulo = require('../models/Modulo');
 const { generarJWT } = require('../helpers/jwt');
 const { combinarCondiciones } = require('../middlewares/busqueda');
 const { verifyTurnstileToken } = require('../helpers/turnstile');
@@ -1014,8 +1015,17 @@ const getMisAccesos = async (req, res) => {
             {
               model: Permisos,
               as: 'permisos',
-              attributes: ['id_permiso', 'nombre', 'descripcion'],
-              through: { attributes: [] }
+              attributes: ['id_permiso', 'nombre', 'id_modulo'],
+              through: { attributes: [] },
+              include: [
+                {
+                  model: Modulo,
+                  as: 'modulo',
+                  attributes: ['id_modulo', 'nombre', 'ruta', 'icono'],
+                  where: { activo: true },
+                  required: false
+                }
+              ]
             }
           ]
         }
@@ -1023,82 +1033,35 @@ const getMisAccesos = async (req, res) => {
     });
 
     if (!usuario) {
-      return res.status(404).json({
-        ok: false,
-        msg: 'Usuario no encontrado'
-      });
+      return res.status(404).json({ ok: false, msg: 'Usuario no encontrado' });
     }
 
-    const permisos = usuario.rol?.permisos?.map(p => p.nombre) || [];
+    const permisosDelRol = usuario.rol?.permisos || [];
+    const permisos = permisosDelRol.map(p => p.nombre);
 
-    const MENU_BACKEND = [
-      {
-        permiso: 'VER_PERSONAS',
-        to: '/personas',
-        label: 'Personas',
-        icon: 'group'
-      },
-      {
-        permiso: 'VER_USUARIOS',
-        to: '/usuarios',
-        label: 'Usuarios',
-        icon: 'manage_accounts'
-      },
-      {
-        permiso: 'VER_AUDITORIA',
-        to: '/auditoria',
-        label: 'Auditoría',
-        icon: 'history'
-      },
-      {
-        permiso: 'VER_CONFIG_SEGURIDAD',
-        to: '/configuracion-seguridad',
-        label: 'Configuración de seguridad',
-        icon: 'shield'
-      },
-      {
-        permiso: 'VER_ROLES',
-        to: '/roles-permisos',
-        label: 'Roles y permisos',
-        icon: 'manage_accounts'
-      },
-      {
-        permiso: 'VER_SACRAMENTOS',
-        to: '/sacramentos',
-        label: 'Sacramentos',
-        icon: 'import_contacts'
-      },
-      {
-        permiso: 'VER_REPORTES_GLOBALES',
-        to: '/reportes',
-        label: 'Reportes',
-        icon: 'bar_chart'
-      },
-      {
-        permiso: 'VER_PARROQUIAS',
-        to: '/parroquias',
-        label: 'Parroquias',
-        icon: 'church'
+    // Agrupa los permisos por módulo para construir el menú dinámicamente
+    const modulosMap = new Map();
+    for (const permiso of permisosDelRol) {
+      if (!permiso.modulo) continue;
+      const { id_modulo, nombre, ruta, icono } = permiso.modulo;
+      if (!modulosMap.has(id_modulo)) {
+        modulosMap.set(id_modulo, { label: nombre, to: ruta, icon: icono, permisos: [] });
       }
-    ];
+      modulosMap.get(id_modulo).permisos.push(permiso.nombre);
+    }
 
-    const menu = MENU_BACKEND.filter(item =>
-      permisos.includes(item.permiso)
-    );
+    const menu = [...modulosMap.values()];
 
     return res.json({
       ok: true,
-      rol: usuario.rol,
+      rol: usuario.rol ? { id_rol: usuario.rol.id_rol, nombre: usuario.rol.nombre } : null,
       permisos,
       menu
     });
 
   } catch (error) {
     console.error('Error al obtener accesos:', error);
-    return res.status(500).json({
-      ok: false,
-      msg: 'Error al obtener accesos'
-    });
+    return res.status(500).json({ ok: false, msg: 'Error al obtener accesos' });
   }
 };
 

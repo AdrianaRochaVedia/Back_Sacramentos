@@ -13,6 +13,10 @@ const TipoSacramento        = require('./TipoSacramento');
 const RolSacramento         = require('./RolSacramento');
 const Permisos              = require('./Permisos');
 const MatrizRiesgo          = require('./MatrizRiesgo');
+const Modulo                = require('./Modulo');
+
+Modulo.hasMany(Permisos,  { foreignKey: 'id_modulo', as: 'permisos' });
+Permisos.belongsTo(Modulo, { foreignKey: 'id_modulo', as: 'modulo' });
 
 Usuario.belongsTo(Rol,           { foreignKey: 'id_rol',        as: 'rol' });
 Rol.hasMany(Usuario,             { foreignKey: 'id_rol',        as: 'usuarios' });
@@ -37,4 +41,5 @@ UsuarioParroquia.belongsTo(Parroquia,{ foreignKey: 'id_parroquia', as: 'parroqui
   RolSacramento,
   Permisos,
   MatrizRiesgo,
+  Modulo,
 ].forEach(registrarHooks);
