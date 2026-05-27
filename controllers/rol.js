@@ -55,6 +55,13 @@ const getRolById = async (req, res) => {
 };
 
 //Verificar su ya existe un rol con los mismos permisos para que no deje crear otro
+const normalizarIds = (lista) =>
+    lista
+        .map(p => Number(typeof p === 'object' ? p.id_permiso : p))
+        .filter(Boolean)
+        .sort((a, b) => a - b)
+        .join(',');
+
 const verificarPermisosRepetidos = async (permisosIds, excludeRolId = null) => {
     const roles = await Rol.findAll({
         where: {
@@ -68,10 +75,10 @@ const verificarPermisosRepetidos = async (permisosIds, excludeRolId = null) => {
         }]
     });
 
-    const permisosOrdenados = [...permisosIds].sort().join(',');
+    const permisosOrdenados = normalizarIds(permisosIds);
 
     const rolDuplicado = roles.find(rol => {
-        const permisosRol = rol.permisos.map(p => p.id_permiso).sort().join(',');
+        const permisosRol = normalizarIds(rol.permisos);
         return permisosRol === permisosOrdenados;
     });
 
