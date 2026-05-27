@@ -579,10 +579,10 @@ const loginUsuario = async (req, res) => {
 
       // ── Auditoría: login pendiente de 2FA (aún no confirmado) ─
       await auditarSeguridad({
-        evento:  'LOGIN_2FA_ENVIADO',
-        exitoso: false,       // se confirmará en verificarCodigo2FA
+        evento:   'LOGIN_2FA_ENVIADO',
+        exitoso:  true,
         username: email,
-        detalle: 'Código 2FA enviado al correo',
+        detalle:  'Código 2FA enviado al correo',
         req,
       });
 
