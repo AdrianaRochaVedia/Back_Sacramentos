@@ -25,14 +25,31 @@ function sanitizeBody(body) {
   return walk(body);
 }
 
-function resolverAccion(method) {
-  const map = { GET: 'READ', POST: 'CREATE', PUT: 'UPDATE', PATCH: 'UPDATE', DELETE: 'DELETE' };
-  return map[method] || method;
-}
+// Rutas que ya se registran en auditoría de seguridad — no duplicar en aplicación
+const SKIP_ROUTES = [
+  { method: 'POST', pattern: /\/api\/usuarios\/?(\?.*)?$/ },      // login
+  { method: 'POST', pattern: /\/api\/usuarios\/verificar-2fa/ },   // 2FA
+  { method: 'GET',  pattern: /\/api\/usuarios\/renew/ },           // refresh token
+  { method: 'POST', pattern: /\/api\/password\/solicitar/ },       // solicitar reset
+  { method: 'POST', pattern: /\/api\/password\/cambiar/ },         // cambiar password
+];
 
-function resolverEntidad(url) {
-  const match = url.replace(/\?.*$/, '').match(/\/api\/([^/?]+)/);
-  return match ? match[1] : null;
+const RUTA_OVERRIDES = [
+  { method: 'POST', pattern: /\/api\/usuarios\/desbloquear/,  accion: 'UNLOCK',  entidad: 'usuarios' },
+  { method: 'POST', pattern: /\/api\/usuarios\/new/,          accion: 'CREATE',  entidad: 'usuarios' },
+];
+
+function resolverAccionEntidad(method, url) {
+  const urlLimpia = url.replace(/\?.*$/, '');
+  const override  = RUTA_OVERRIDES.find(r => r.method === method && r.pattern.test(urlLimpia));
+  if (override) return { accion: override.accion, entidad: override.entidad };
+
+  const methodMap = { GET: 'READ', POST: 'CREATE', PUT: 'UPDATE', PATCH: 'UPDATE', DELETE: 'DELETE' };
+  const match     = urlLimpia.match(/\/api\/([^/?]+)/);
+  return {
+    accion:  methodMap[method] || method,
+    entidad: match ? match[1] : null,
+  };
 }
 
 function resolverUsername(req) {
@@ -62,9 +79,12 @@ module.exports = function auditarAplicacion() {
   return function (req, res, next) {
     if (SKIP_PATHS.some(p => req.originalUrl?.startsWith(p))) return next();
 
-    const inicio = new Date();
-    const method = (req.method || 'GET').toUpperCase();
-    const url    = req.originalUrl || req.url || '/';
+    const inicio  = new Date();
+    const method  = (req.method || 'GET').toUpperCase();
+    const url     = req.originalUrl || req.url || '/';
+    const urlBase = url.replace(/\?.*$/, '');
+
+    if (SKIP_ROUTES.some(r => r.method === method && r.pattern.test(urlBase))) return next();
 
     const xff = req.headers['x-forwarded-for'];
     const ip  = xff
@@ -92,6 +112,8 @@ module.exports = function auditarAplicacion() {
           ? (res.locals._errorMsg || null)
           : null;
 
+        const { accion, entidad } = resolverAccionEntidad(method, url);
+
         await AuditoriaAplicacion.create({
           fecha_inicio:       inicio,
           fecha_fin:          fin,
@@ -100,8 +122,8 @@ module.exports = function auditarAplicacion() {
           http_method:        method,
           http_status:        res.statusCode,
           url,
-          entidad:            resolverEntidad(url),
-          accion:             resolverAccion(method),
+          entidad:            res.locals._entidad ?? entidad,
+          accion:             res.locals._accion  ?? accion,
           dato_anterior:      datoAnterior,
           dato_nuevo:         datoNuevo,
           campos_modificados: camposModificados,

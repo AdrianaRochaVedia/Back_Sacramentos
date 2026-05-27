@@ -262,6 +262,10 @@ const crearUsuario = async (req, res) => {
       return res.status(400).json({ ok: false, msg: 'El dominio del correo no está permitido' });
     }
 
+    if (fecha_nacimiento && new Date(fecha_nacimiento) >= new Date()) {
+      return res.status(400).json({ ok: false, msg: 'La fecha de nacimiento no puede ser una fecha futura' });
+    }
+
     // ── Validar nombre completo único (case-insensitive) ──────────
     const whereNombre = {
       nombre:           { [Op.iLike]: nombre.trim() },
@@ -831,7 +835,12 @@ const actualizarUsuario = async (req, res = response) => {
     if (apellido_paterno !== undefined) updates.apellido_paterno = apellido_paterno;
     if (apellido_materno !== undefined) updates.apellido_materno = apellido_materno;
     if (email !== undefined) updates.email = email;
-    if (fecha_nacimiento !== undefined) updates.fecha_nacimiento = fecha_nacimiento;
+    if (fecha_nacimiento !== undefined) {
+      if (new Date(fecha_nacimiento) >= new Date()) {
+        return res.status(400).json({ ok: false, msg: 'La fecha de nacimiento no puede ser una fecha futura' });
+      }
+      updates.fecha_nacimiento = fecha_nacimiento;
+    }
     if (id_rol !== undefined) updates.id_rol = id_rol;
     if (activo !== undefined) updates.activo = activo;
 
