@@ -76,6 +76,7 @@ const updateRiesgo = async (req, res) => {
     if (!riesgo || !riesgo.activo)
       return res.status(404).json({ ok: false, msg: 'Riesgo no encontrado' });
  
+    res.locals._instancia = riesgo;
     await riesgo.update({ ...req.body, updated_at: new Date() });
     return res.json({ ok: true, msg: 'Riesgo actualizado correctamente', riesgo });
   } catch (error) {
@@ -89,6 +90,7 @@ const deleteRiesgo = async (req, res) => {
   try {
     const riesgo = await MatrizRiesgo.findByPk(req.params.id);
     if (!riesgo) return res.status(404).json({ ok: false, msg: 'Riesgo no encontrado' });
+    res.locals._instancia = riesgo;
     await riesgo.update({ activo: false });
     return res.json({ ok: true, msg: 'Riesgo eliminado correctamente' });
   } catch (error) {

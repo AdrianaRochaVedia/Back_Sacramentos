@@ -72,6 +72,7 @@ const actualizarPermiso = async (req, res) => {
         const updates = {};
         if (nombre !== undefined) updates.nombre = nombre;
         if (descripcion !== undefined) updates.descripcion = descripcion;
+        res.locals._instancia = permiso;
         await permiso.update(updates);
         res.json({ ok: true, permiso });
 
@@ -97,6 +98,7 @@ const eliminarPermiso = async (req, res) => {
             });
         }
 
+        res.locals._instancia = permiso;
         await permiso.update({ activo: false });
         res.json({ ok: true, msg: 'Permiso eliminado correctamente' });
 
