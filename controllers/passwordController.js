@@ -152,12 +152,13 @@ exports.cambiar = async (req, res) => {
     }
 
     const usuario = await Usuario.findOne({ where: { id_usuario: registro.id_usuario, activo: true } });
+    const usernameForAudit = usuario ? usuario.email : null;
 
     if (!usuario) {
       await auditarSeguridad({
         evento:  'PASSWORD_CHANGE_FAIL',
         exitoso: false,
-        username: null,
+        username: usernameForAudit,
         detalle: 'Usuario no válido al cambiar contraseña',
         req,
       });
