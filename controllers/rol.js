@@ -199,14 +199,25 @@ const actualizarRol = async (req, res) => {
 
     if (permisos !== undefined) {
       await sequelize.transaction(async (t) => {
+        const existentes = await RolPermiso.findAll({ where: { id_rol: id }, transaction: t });
+        const mapaExistentes = Object.fromEntries(
+          existentes.map(rp => [rp.id_permiso, rp.visible_en_menu])
+        );
+
         await RolPermiso.destroy({ where: { id_rol: id }, transaction: t });
 
         if (permisos.length > 0) {
-          const rolPermisos = permisos.map(p => ({
-            id_rol: parseInt(id),
-            id_permiso: typeof p === 'object' ? p.id_permiso : p,
-            visible_en_menu: typeof p === 'object' ? (p.visible_en_menu ?? true) : true
-          }));
+          const rolPermisos = permisos.map(p => {
+            const idPermiso = typeof p === 'object' ? p.id_permiso : p;
+            const visibleExplicito = typeof p === 'object' ? p.visible_en_menu : undefined;
+            const visiblePrevio = mapaExistentes[idPermiso];
+            const visible = visibleExplicito !== undefined && visibleExplicito !== null
+              ? visibleExplicito
+              : visiblePrevio !== undefined
+                ? visiblePrevio
+                : true;
+            return { id_rol: parseInt(id), id_permiso: idPermiso, visible_en_menu: visible };
+          });
 
           await RolPermiso.bulkCreate(rolPermisos, { transaction: t });
         }
