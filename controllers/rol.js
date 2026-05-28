@@ -186,6 +186,15 @@ const actualizarRol = async (req, res) => {
       }
     }
 
+    const includePermisos = [{
+      model: Permiso,
+      as: 'permisos',
+      attributes: ['id_permiso', 'nombre'],
+      through: { attributes: ['visible_en_menu', 'fecha_registro'] }
+    }];
+
+    const rolPrevio = await Rol.findByPk(id, { include: includePermisos });
+
     const updates = {};
 
     if (nombre !== undefined) updates.nombre = nombre;
@@ -224,16 +233,10 @@ const actualizarRol = async (req, res) => {
       });
     }
 
-    const rolActualizado = await Rol.findByPk(id, {
-      include: [
-        {
-          model: Permiso,
-          as: 'permisos',
-          attributes: ['id_permiso', 'nombre'],
-          through: { attributes: ['visible_en_menu', 'fecha_registro'] }
-        }
-      ]
-    });
+    const rolActualizado = await Rol.findByPk(id, { include: includePermisos });
+
+    res.locals._instancia._datoAnterior = rolPrevio.get({ plain: true });
+    res.locals._instancia._datoNuevo    = rolActualizado.get({ plain: true });
 
     return res.json({
       ok: true,

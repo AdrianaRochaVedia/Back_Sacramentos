@@ -783,6 +783,16 @@ const actualizarUsuario = async (req, res = response) => {
       });
     }
 
+    const includeUsuario = [
+      { model: Rol,      as: 'rol',       attributes: ['id_rol', 'nombre'] },
+      { model: Parroquia, as: 'parroquias', attributes: ['id_parroquia', 'nombre', 'direccion'],
+        through: { attributes: ['rol_en_parroquia', 'activo'], where: { activo: true } }, required: false }
+    ];
+    const usuarioPrevio = await Usuario.findByPk(id, {
+      attributes: { exclude: ['password', 'password_hash'] },
+      include: includeUsuario
+    });
+
     const rolAnteriorId = usuario.id_rol;
     let rolActual = null;
     let rolAnterior = null;
@@ -947,29 +957,12 @@ const actualizarUsuario = async (req, res = response) => {
     }
 
     const usuarioActualizado = await Usuario.findByPk(id, {
-      attributes: {
-        exclude: ['password', 'password_hash']
-      },
-      include: [
-        {
-          model: Rol,
-          as: 'rol',
-          attributes: ['id_rol', 'nombre']
-        },
-        {
-          model: Parroquia,
-          as: 'parroquias',
-          attributes: ['id_parroquia', 'nombre', 'direccion'],
-          through: {
-            attributes: ['rol_en_parroquia', 'activo'],
-            where: {
-              activo: true
-            }
-          },
-          required: false
-        }
-      ]
+      attributes: { exclude: ['password', 'password_hash'] },
+      include: includeUsuario
     });
+
+    res.locals._instancia._datoAnterior = usuarioPrevio.get({ plain: true });
+    res.locals._instancia._datoNuevo    = usuarioActualizado.get({ plain: true });
 
     return res.json({
       ok: true,
@@ -996,6 +989,7 @@ const eliminarUsuario = async (req, res = response) => {
             return res.status(404).json({ ok: false, msg: 'Usuario no encontrado' });
         }
 
+        res.locals._instancia = usuario;
         await usuario.update({ activo: false });
 
         await UsuarioParroquia.update(
