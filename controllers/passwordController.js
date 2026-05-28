@@ -82,11 +82,16 @@ exports.validar = async (req, res) => {
     });
 
     if (!registro) {
-      // ── Auditoría: token inválido o expirado ──────────────────
+      const registroExpirado = await PasswordReset.findOne({ where: { token_hash } });
+      let usernameAudit = null;
+      if (registroExpirado) {
+        const usuarioExpirado = await Usuario.findByPk(registroExpirado.id_usuario, { attributes: ['email'] });
+        usernameAudit = usuarioExpirado?.email || null;
+      }
       await auditarSeguridad({
         evento:  'PASSWORD_TOKEN_INVALIDO',
         exitoso: false,
-        username: null,
+        username: usernameAudit,
         detalle: 'Token de reset inválido o expirado al validar',
         req,
       });
@@ -130,11 +135,16 @@ exports.cambiar = async (req, res) => {
     });
 
     if (!registro) {
-      // ── Auditoría: token inválido al cambiar ──────────────────
+      const registroExpirado = await PasswordReset.findOne({ where: { token_hash } });
+      let usernameAudit = null;
+      if (registroExpirado) {
+        const usuarioExpirado = await Usuario.findByPk(registroExpirado.id_usuario, { attributes: ['email'] });
+        usernameAudit = usuarioExpirado?.email || null;
+      }
       await auditarSeguridad({
         evento:  'PASSWORD_TOKEN_INVALIDO',
         exitoso: false,
-        username: null,
+        username: usernameAudit,
         detalle: 'Token de reset inválido o expirado al cambiar contraseña',
         req,
       });
