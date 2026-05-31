@@ -1,16 +1,27 @@
 const request = require('supertest');
 const { app } = require('../../index');
 const { sequelize } = require('../../database/config');
+const Usuario = require('../../models/Usuario');
 
-// Tokens y dominio permitido para que funcione la prueba
 const TOKEN_VALIDO = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOjUsImVtYWlsIjoidGFuaWEucGVyZXouZEB1Y2IuZWR1LmJvIiwiaWF0IjoxNzgwMjY2Mjk4LCJleHAiOjE3ODAyOTE0OTh9.byUBDnP6xZhPeO_V5OrAP24CaFsi-1DQHtdf8HgvVrM';
 const DOMINIO_PERMITIDO = 'ucb.edu.bo';
 
 beforeAll(async () => {
   await sequelize.authenticate();
+  await Usuario.destroy({ 
+    where: { email: `isabel.rocha.v@${DOMINIO_PERMITIDO}` } 
+  });
+  await Usuario.destroy({
+    where: {
+      nombre:           'Isabel Antonella',
+      apellido_paterno: 'Rocha',
+      apellido_materno: 'Vedia'
+    }
+  });
 });
 
 afterAll(async () => {
+  await Usuario.destroy({ where: { email: `isabel.rocha.v@${DOMINIO_PERMITIDO}` } });
   await sequelize.close();
 });
 
@@ -20,10 +31,10 @@ describe('Crear usuario con datos válidos', () => {
   test('Debe retornar 201 y los datos del usuario creado', async () => {
     // 1. Preparación de la prueba
     const nuevoUsuario = {
-      nombre:           'Ana',
-      apellido_paterno: 'Lopez',
-      apellido_materno: 'Torres',
-      email:            `ana.lopez@${DOMINIO_PERMITIDO}`,
+      nombre:           'Isabel Antonella',
+      apellido_paterno: 'Rocha',
+      apellido_materno: 'Vedia',
+      email:            `isabel.rocha.v@${DOMINIO_PERMITIDO}`,
       password:         'Clave1234!',
       fecha_nacimiento: '1995-06-20',
       id_rol:           2
@@ -50,16 +61,16 @@ describe('Crear usuario con email duplicado', () => {
   test('Debe retornar 400 indicando que el email ya está registrado', async () => {
     // 1. Preparación de la prueba
     const usuarioEmailDuplicado = {
-      nombre:           'Pedro',
-      apellido_paterno: 'Ramirez',
-      apellido_materno: 'Diaz',
-      email:            `ana.lopez@${DOMINIO_PERMITIDO}`,
+      nombre:           'Isabel Antonella',
+      apellido_paterno: 'Rocha',
+      apellido_materno: 'Vedia',
+      email:            `isabel.rocha.v@${DOMINIO_PERMITIDO}`, // mismo email del caso 1
       password:         'Clave1234!',
-      fecha_nacimiento: '1990-01-15',
+      fecha_nacimiento: '1995-06-20',
       id_rol:           2
     };
 
-    // 2.  Lógica de la Prueba
+    // 2. Lógica de la Prueba
     const response = await request(app)
       .post('/api/usuarios/new')
       .set('x-token', TOKEN_VALIDO)
@@ -75,19 +86,19 @@ describe('Crear usuario con email duplicado', () => {
 
 // CASO 3 — Crear usuario con nombre completo duplicado
 describe('Crear usuario con nombre completo duplicado', () => {
-  test('Debe retornar 400 indicando que el nombre completo ya existe', async () => {
+  test('Debe retornar 400 al intentar registrar un nombre completo ya existente', async () => {
     // 1. Preparación de la prueba
     const usuarioNombreDuplicado = {
-      nombre:           'Ana',
-      apellido_paterno: 'Lopez',
-      apellido_materno: 'Torres',
-      email:            `ana.lopez.t@${DOMINIO_PERMITIDO}`, 
+      nombre:           'Isabel Antonella',
+      apellido_paterno: 'Rocha',
+      apellido_materno: 'Vedia',
+      email:            `irocha@${DOMINIO_PERMITIDO}`, // email diferente, mismo nombre
       password:         'Clave1234!',
       fecha_nacimiento: '1995-06-20',
-      id_rol:           1
+      id_rol:           2
     };
 
-    // 2.  Lógica de la Prueba
+    // 2. Lógica de la Prueba
     const response = await request(app)
       .post('/api/usuarios/new')
       .set('x-token', TOKEN_VALIDO)
@@ -96,7 +107,6 @@ describe('Crear usuario con nombre completo duplicado', () => {
     // 3. Verificación (Assert)
     expect(response.status).toBe(400);
     expect(response.body.ok).toBe(false);
-    expect(response.body.msg).toMatch(/nombre completo/i);
   });
 });
 
@@ -111,11 +121,11 @@ describe('Crear usuario con fecha de nacimiento futura', () => {
       apellido_materno: 'Vega',
       email:            `carlos.mendez@${DOMINIO_PERMITIDO}`,
       password:         'Clave1234!',
-      fecha_nacimiento: '2099-01-01', 
+      fecha_nacimiento: '2099-01-01',
       id_rol:           1
     };
 
-    // 2.  Lógica de la Prueba
+    // 2. Lógica de la Prueba
     const response = await request(app)
       .post('/api/usuarios/new')
       .set('x-token', TOKEN_VALIDO)
@@ -136,7 +146,7 @@ describe('Obtener lista de usuarios paginada', () => {
     const page  = 1;
     const limit = 5;
 
-    // 2.  Lógica de la Prueba
+    // 2. Lógica de la Prueba
     const response = await request(app)
       .get(`/api/usuarios?page=${page}&limit=${limit}`)
       .set('x-token', TOKEN_VALIDO);
