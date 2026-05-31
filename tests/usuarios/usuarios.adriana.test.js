@@ -2,15 +2,17 @@ const request = require('supertest');
 const { app } = require('../../index');
 const { sequelize } = require('../../database/config');
 const Usuario = require('../../models/Usuario');
+const { TOKEN_VALIDO, DOMINIO_PERMITIDO } = require('../config');
 
-const TOKEN_VALIDO = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOjUsImVtYWlsIjoidGFuaWEucGVyZXouZEB1Y2IuZWR1LmJvIiwiaWF0IjoxNzgwMjY2Mjk4LCJleHAiOjE3ODAyOTE0OTh9.byUBDnP6xZhPeO_V5OrAP24CaFsi-1DQHtdf8HgvVrM';
-const DOMINIO_PERMITIDO = 'ucb.edu.bo';
+
+// const ID_USUARIO_EXISTENTE    = 1;
+// const ID_USUARIO_A_ELIMINAR   = 2;
+// const ID_USUARIO_A_DESBLOQUEAR = 3;
+// const ID_USUARIO_INEXISTENTE  = 999999;
 
 beforeAll(async () => {
   await sequelize.authenticate();
-  await Usuario.destroy({ 
-    where: { email: `isabel.rocha.v@${DOMINIO_PERMITIDO}` } 
-  });
+  await Usuario.destroy({ where: { email: `isabel.rocha.v@${DOMINIO_PERMITIDO}` } });
   await Usuario.destroy({
     where: {
       nombre:           'Isabel Antonella',
@@ -18,12 +20,12 @@ beforeAll(async () => {
       apellido_materno: 'Vedia'
     }
   });
-});
+}, 30000); 
 
 afterAll(async () => {
   await Usuario.destroy({ where: { email: `isabel.rocha.v@${DOMINIO_PERMITIDO}` } });
   await sequelize.close();
-});
+}, 30000); 
 
 
 // CASO 1 — Crear usuario con datos válidos
@@ -64,7 +66,7 @@ describe('Crear usuario con email duplicado', () => {
       nombre:           'Isabel Antonella',
       apellido_paterno: 'Rocha',
       apellido_materno: 'Vedia',
-      email:            `isabel.rocha.v@${DOMINIO_PERMITIDO}`, 
+      email:            `isabel.rocha.v@${DOMINIO_PERMITIDO}`,
       password:         'Clave1234!',
       fecha_nacimiento: '1995-06-20',
       id_rol:           2
@@ -161,3 +163,4 @@ describe('Obtener lista de usuarios paginada', () => {
     expect(Array.isArray(response.body.usuarios)).toBe(true);
   });
 });
+
