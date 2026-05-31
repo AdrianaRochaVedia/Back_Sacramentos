@@ -485,23 +485,23 @@ const loginUsuario = async (req, res) => {
       return res.status(500).json({ ok: false, msg: 'No hay configuración de seguridad registrada' });
     }
 
-    const usaCaptcha = config.usa_captcha === true;
+    // const usaCaptcha = config.usa_captcha === true;
 
-    if (usaCaptcha) {
-      if (!turnstileToken) {
-        return res.status(400).json({ ok: false, msg: 'Debe completar la verificación captcha' });
-      }
+    // if (usaCaptcha) {
+    //   if (!turnstileToken) {
+    //     return res.status(400).json({ ok: false, msg: 'Debe completar la verificación captcha' });
+    //   }
 
-      const captchaResult = await verifyTurnstileToken({ token: turnstileToken, remoteip: req.ip });
+    //   const captchaResult = await verifyTurnstileToken({ token: turnstileToken, remoteip: req.ip });
 
-      if (!captchaResult.ok) {
-        return res.status(400).json({
-          ok: false,
-          msg: captchaResult.msg || 'Captcha inválido',
-          errors: captchaResult.errors || []
-        });
-      }
-    }
+    //   if (!captchaResult.ok) {
+    //     return res.status(400).json({
+    //       ok: false,
+    //       msg: captchaResult.msg || 'Captcha inválido',
+    //       errors: captchaResult.errors || []
+    //     });
+    //   }
+    // }
 
     const usuario = await Usuario.findOne({
       where: { email, activo: true },
