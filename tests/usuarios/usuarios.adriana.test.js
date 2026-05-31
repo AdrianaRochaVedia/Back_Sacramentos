@@ -64,7 +64,7 @@ describe('Crear usuario con email duplicado', () => {
       nombre:           'Isabel Antonella',
       apellido_paterno: 'Rocha',
       apellido_materno: 'Vedia',
-      email:            `isabel.rocha.v@${DOMINIO_PERMITIDO}`, // mismo email del caso 1
+      email:            `isabel.rocha.v@${DOMINIO_PERMITIDO}`, 
       password:         'Clave1234!',
       fecha_nacimiento: '1995-06-20',
       id_rol:           2
@@ -92,7 +92,7 @@ describe('Crear usuario con nombre completo duplicado', () => {
       nombre:           'Isabel Antonella',
       apellido_paterno: 'Rocha',
       apellido_materno: 'Vedia',
-      email:            `irocha@${DOMINIO_PERMITIDO}`, // email diferente, mismo nombre
+      email:            `irocha@${DOMINIO_PERMITIDO}`, 
       password:         'Clave1234!',
       fecha_nacimiento: '1995-06-20',
       id_rol:           2
@@ -141,7 +141,7 @@ describe('Crear usuario con fecha de nacimiento futura', () => {
 
 // CASO 5 — Obtener lista de usuarios paginada
 describe('Obtener lista de usuarios paginada', () => {
-  test('Debe retornar 200 con la lista de usuarios y datos de paginación', async () => {
+  test('Debe retornar 200 con la lista de usuarios y datos de paginación que son 5 por página', async () => {
     // 1. Preparación de la prueba
     const page  = 1;
     const limit = 5;
