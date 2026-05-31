@@ -31,6 +31,7 @@ const SKIP_ROUTES = [
   { method: 'POST', pattern: /\/api\/usuarios\/verificar-2fa/ },   // 2FA
   { method: 'GET',  pattern: /\/api\/usuarios\/renew/ },           // refresh token
   { method: 'POST', pattern: /\/api\/password\/solicitar/ },       // solicitar reset
+  { method: 'GET',  pattern: /\/api\/password\/validar/ },         // validar token (token en query param)
   { method: 'POST', pattern: /\/api\/password\/cambiar/ },         // cambiar password
 ];
 
