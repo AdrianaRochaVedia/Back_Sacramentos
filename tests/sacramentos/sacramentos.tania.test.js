@@ -209,4 +209,151 @@ describe('Módulo de Sacramentos — Pruebas unitarias (Tania)', () => {
     expect(res.status).not.toHaveBeenCalled();
   });
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // PRUEBA 6 — getSacramento: error interno (500)
+  // ══════════════════════════════════════════════════════════════════════════
+  test('PRUEBA 6 — getSacramento devuelve 500 cuando la base de datos lanza un error', async () => {
+
+    // 1) PREPARACIÓN
+    //    Se simula que findOne lanza una excepción inesperada
+    Sacramento.findOne = jest.fn().mockRejectedValue(new Error('DB caída'));
+
+    const req = { params: { id: '1' } };
+    const res = mockRes();
+
+    // 2) LÓGICA
+    await getSacramento(req, res);
+
+    // 3) VERIFICACIÓN
+    //    El controlador debe capturar el error y responder 500
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith({
+      ok: false,
+      msg: 'Error al obtener sacramento',
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // PRUEBA 7 — crearSacramento: error interno en BD (500)
+  // ══════════════════════════════════════════════════════════════════════════
+  test('PRUEBA 7 — crearSacramento devuelve 500 cuando Sacramento.create falla', async () => {
+
+    // 1) PREPARACIÓN
+    //    Se simula un fallo al persistir en la base de datos
+    Sacramento.create = jest.fn().mockRejectedValue(new Error('Error de BD'));
+
+    const req = {
+      body: {
+        fecha_sacramento: '2024-06-01',
+        foja: 'C',
+        numero: 3,
+        usuario_id_usuario: 1,
+        institucion_parroquia_id_parroquia: 2,
+        tipo_sacramento_id_tipo: 1,
+      },
+    };
+    const res = mockRes();
+
+    // 2) LÓGICA
+    await crearSacramento(req, res);
+
+    // 3) VERIFICACIÓN
+    //    Debe responder con 500 y mensaje de error genérico
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith({
+      ok: false,
+      msg: 'Error al crear el sacramento',
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // PRUEBA 8 — actualizarSacramento: sacramento no encontrado (404)
+  // ══════════════════════════════════════════════════════════════════════════
+  test('PRUEBA 8 — actualizarSacramento devuelve 404 cuando el sacramento no existe', async () => {
+
+    // 1) PREPARACIÓN
+    //    El ID es numérico válido pero no hay registro activo con ese ID
+    Sacramento.findOne = jest.fn().mockResolvedValue(null);
+
+    const req = { params: { id: '99' }, body: { foja: 'Z' } };
+    const res = mockRes();
+
+    // 2) LÓGICA
+    await actualizarSacramento(req, res);
+
+    // 3) VERIFICACIÓN
+    //    Debe responder 404 sin intentar actualizar nada
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith({ ok: false, msg: 'Sacramento no encontrado' });
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // PRUEBA 9 — actualizarSacramento: body sin campos editables (400)
+  // ══════════════════════════════════════════════════════════════════════════
+  test('PRUEBA 9 — actualizarSacramento devuelve 400 cuando el body no trae campos a actualizar', async () => {
+
+    // 1) PREPARACIÓN
+    //    El sacramento existe pero el body viene vacío (sin ningún campo actualizable)
+    const sacramentoExistente = {
+      id_sacramento: 7,
+      activo: true,
+      update: jest.fn(),
+    };
+
+    Sacramento.findOne = jest.fn().mockResolvedValue(sacramentoExistente);
+
+    const req = { params: { id: '7' }, body: {} };
+    const res = mockRes();
+
+    // 2) LÓGICA
+    await actualizarSacramento(req, res);
+
+    // 3) VERIFICACIÓN
+    //    El controlador detecta que no hay nada que actualizar y rechaza con 400
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      ok: false,
+      msg: 'No se enviaron campos a actualizar',
+    });
+    expect(sacramentoExistente.update).not.toHaveBeenCalled();
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // PRUEBA 10 — getSacramentos: listado paginado exitoso (200)
+  // ══════════════════════════════════════════════════════════════════════════
+  test('PRUEBA 10 — getSacramentos devuelve 200 con la lista paginada de sacramentos', async () => {
+
+    // 1) PREPARACIÓN
+    //    Se simulan dos sacramentos devueltos por findAndCountAll
+    const filas = [
+      { id_sacramento: 1, foja: 'A', numero: 1 },
+      { id_sacramento: 2, foja: 'B', numero: 2 },
+    ];
+
+    Sacramento.findAndCountAll = jest.fn().mockResolvedValue({
+      count: 2,
+      rows: filas,
+    });
+
+    const req = { query: { page: '1', limit: '10' } };
+    const res = mockRes();
+
+    // 2) LÓGICA
+    await getSacramentos(req, res);
+
+    // 3) VERIFICACIÓN
+    //    La respuesta debe incluir ok:true, los datos y los metadatos de paginación
+    expect(Sacramento.findAndCountAll).toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ok: true,
+        sacramentos: filas,
+        totalItems: 2,
+        totalPages: 1,
+        currentPage: 1,
+      })
+    );
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
 });
