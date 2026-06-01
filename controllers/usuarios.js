@@ -1011,6 +1011,25 @@ const eliminarUsuario = async (req, res = response) => {
     }
 };
 
+//eliminado fisico
+const eliminarUsuarioFisico = async (req, res = response) => {
+    const { id } = req.params;
+    try {
+        const usuario = await Usuario.findOne({ where: { id_usuario: id } });
+        if (!usuario) {
+            return res.status(404).json({ ok: false, msg: 'Usuario no encontrado' });
+        }
+
+        await UsuarioParroquia.destroy({ where: { id_usuario: id } });
+        await usuario.destroy();
+
+        res.json({ ok: true, msg: 'Usuario eliminado físicamente' });
+    } catch (error) {
+        console.error('Error al eliminar físicamente:', error);
+        res.status(500).json({ ok: false, msg: 'Error al eliminar el usuario' });
+    }
+};
+
 const desbloquearUsuario = async (req, res) => {
   const { id } = req.params;
 
@@ -1150,5 +1169,6 @@ const getMisAccesos = async (req, res) => {
     getAllUsuarios,
     verificarCodigo2FA,
     desbloquearUsuario,
-    getMisAccesos
+    getMisAccesos, 
+    eliminarUsuarioFisico
   };

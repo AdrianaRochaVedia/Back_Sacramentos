@@ -12,7 +12,8 @@ const {
   eliminarUsuario,
   desbloquearUsuario,
   verificarCodigo2FA,
-  getMisAccesos
+  getMisAccesos,
+  eliminarUsuarioFisico
 } = require('../controllers/usuarios');
 const { validarJWT } = require('../middlewares/validar-jwt');
 const { passwordFuerte } = require('../helpers/validar-password');
@@ -67,5 +68,7 @@ router.patch('/:id', validarJWT, validarPermiso('DESACTIVAR_USUARIO'), [
 ], eliminarUsuario);
 
 router.post('/desbloquear/:id', validarJWT, validarPermiso('DESBLOQUEAR_USUARIO'), desbloquearUsuario);
+
+router.post('/eliminar-fisico/:id', validarJWT, validarPermiso('DESACTIVAR_USUARIO'), eliminarUsuarioFisico);
 
 module.exports = router;
