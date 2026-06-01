@@ -29,7 +29,7 @@ app.disable('x-powered-by');
 const ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'https://fronttaller0.vercel.app',
-  'http://sacra360.s3-website-us-east-1.amazonaws.com',
+  'http://sacra360.s3-website-us-east-1.amazonaws.com','https://reportes-t86w.onrender.com/graphql',
 ];
 
 app.use(cors({
@@ -51,7 +51,7 @@ app.use(helmet({
       fontSrc:      ["'self'", 'https://fonts.gstatic.com'],
       scriptSrc:    ["'self'", "'unsafe-inline'"],
       imgSrc:       ["'self'", 'data:', 'https:'],
-      connectSrc:   ["'self'", ...ALLOWED_ORIGINS, 'https://back-sacramentos.onrender.com', 'https://*', 'http://*'],
+      connectSrc:   ["'self'", ...ALLOWED_ORIGINS, 'https://back-sacramentos.onrender.com','https://reportes-t86w.onrender.com/graphql','https://*', 'http://*'],
       objectSrc:    ["'none'"],
       baseUri:      ["'self'"],
       formAction:   ["'self'"],
@@ -91,10 +91,16 @@ const swaggerSpec = swaggerJsdoc({
       version:     '1.0.0',
       contact:     { name: 'Soporte API MIGA', email: 'soporte@miga.com' },
     },
-    servers: [{
-      url:         IS_PROD ? 'https://back-sacramentos.onrender.com' : 'http://localhost:3000',
-      description: IS_PROD ? 'Servidor de producción' : 'Servidor local',
-    }],
+    servers: [
+      {
+        url:         IS_PROD ? 'https://back-sacramentos.onrender.com' : 'http://localhost:3000',
+        description: IS_PROD ? 'Servidor de producción' : 'Servidor local',
+      },
+      {
+        url:         'https://reportes-t86w.onrender.com/graphql',
+        description:  'Servidor GraphQL',
+      },
+    ],
     components: {
       securitySchemes: {
         xToken: { type: 'apiKey', in: 'header', name: 'x-token', description: 'Token de autenticación' },
