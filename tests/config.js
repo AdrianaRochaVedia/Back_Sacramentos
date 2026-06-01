@@ -1,0 +1,4 @@
+module.exports = {
+  TOKEN_VALIDO: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOjUsImVtYWlsIjoidGFuaWEucGVyZXouZEB1Y2IuZWR1LmJvIiwiaWF0IjoxNzgwMjY2Mjk4LCJleHAiOjE3ODAyOTE0OTh9.byUBDnP6xZhPeO_V5OrAP24CaFsi-1DQHtdf8HgvVrM',
+  DOMINIO_PERMITIDO: 'ucb.edu.bo'
+};
