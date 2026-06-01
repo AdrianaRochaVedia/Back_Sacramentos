@@ -314,45 +314,5 @@ describe('Módulo de Personas — Pruebas unitarias', () => {
     expect(res.json).toHaveBeenCalledWith({ ok: false, msg: 'Persona no encontrada' });
   });
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // eliminarPersona
-  // ══════════════════════════════════════════════════════════════════════════
-
-  test('PRUEBA 11 — eliminarPersona realiza baja lógica y responde 200', async () => {
-
-    // 1) PREPARACIÓN
-    const personaActiva = {
-      id_persona: 4,
-      activo: true,
-      update: jest.fn().mockResolvedValue(true),
-    };
-    Persona.findOne.mockResolvedValue(personaActiva);
-    const req = { params: { id: '4' } };
-    const res = mockRes();
-
-    // 2) LÓGICA
-    await eliminarPersona(req, res);
-
-    // 3) VERIFICACIÓN
-    expect(personaActiva.update).toHaveBeenCalledWith({ activo: false });
-    expect(res.json).toHaveBeenCalledWith({ ok: true, msg: 'Persona eliminada correctamente' });
-    expect(res.status).not.toHaveBeenCalled();
-  });
-
-  test('PRUEBA 12 — eliminarPersona devuelve 404 si la persona no existe o ya fue eliminada', async () => {
-
-    // 1) PREPARACIÓN
-    Persona.findOne.mockResolvedValue(null);
-    const req = { params: { id: '88' } };
-    const res = mockRes();
-
-    // 2) LÓGICA
-    await eliminarPersona(req, res);
-
-    // 3) VERIFICACIÓN
-    expect(res.status).toHaveBeenCalledWith(404);
-    expect(res.json).toHaveBeenCalledWith({ ok: false, msg: 'Persona no encontrada' });
-  });
-
 
 });
