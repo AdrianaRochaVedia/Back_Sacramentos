@@ -74,7 +74,7 @@ describe('Crear usuario con datos válidos', () => {
       apellido_paterno: 'Rocha',
       apellido_materno: 'Vedia',
       email:            `isabel.rocha.v@${DOMINIO_PERMITIDO}`,
-      password:         'ClaveSegura1234!',   // ✅ 16 caracteres, cumple mínimo 12
+      password:         'ClaveSegura1234!',   
       fecha_nacimiento: '1995-06-20',
       id_rol:           2
     };
@@ -104,7 +104,7 @@ describe('Crear usuario con email duplicado', () => {
       apellido_paterno: 'Rocha',
       apellido_materno: 'Vedia',
       email:            `isabel.rocha.v@${DOMINIO_PERMITIDO}`,
-      password:         'ClaveSegura1234!',   // ✅ mismo password válido
+      password:         'ClaveSegura1234!',  
       fecha_nacimiento: '1995-06-20',
       id_rol:           2
     };
@@ -132,7 +132,7 @@ describe('Crear usuario con nombre completo duplicado', () => {
       apellido_paterno: 'Rocha',
       apellido_materno: 'Vedia',
       email:            `irocha@${DOMINIO_PERMITIDO}`,
-      password:         'ClaveSegura1234!',   // ✅ password válido
+      password:         'ClaveSegura1234!',   
       fecha_nacimiento: '1995-06-20',
       id_rol:           2
     };
@@ -159,7 +159,7 @@ describe('Crear usuario con fecha de nacimiento futura', () => {
       apellido_paterno: 'Mendez',
       apellido_materno: 'Vega',
       email:            `carlos.mendez@${DOMINIO_PERMITIDO}`,
-      password:         'ClaveSegura1234!',   // ✅ password válido
+      password:         'ClaveSegura1234!',   
       fecha_nacimiento: '2099-01-01',
       id_rol:           1
     };
