@@ -192,7 +192,7 @@ describe('Obtener detalle de auditoría existente', () => {
     expect(response.status).toBe(200);
     expect(response.body.ok).toBe(true);
     expect(response.body.data).toHaveProperty('id_log');
-    expect(response.body.data.id_log).toBe(idLog);
+    expect(response.body.data.id_log).toBe(String(idLog));
   });
 });
 
