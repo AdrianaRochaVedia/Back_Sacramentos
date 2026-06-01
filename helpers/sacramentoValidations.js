@@ -1,4 +1,4 @@
-const { Op } = require('sequelize');
+const { Op, Sequelize } = require('sequelize');
 const Persona         = require('../models/Persona');
 const PersonaSacramento = require('../models/PersonaSacramento');
 
@@ -47,7 +47,7 @@ const getFechaSacramento = async (persona_id, rol_id) => {
   const rel = await PersonaSacramento.findOne({
     where: { persona_id_persona: persona_id, rol_sacramento_id_rol_sacra: rol_id },
     include: [{ association: 'sacramento', attributes: ['fecha_sacramento'] }],
-    order: [[{ association: 'sacramento' }, 'fecha_sacramento', 'ASC']],
+    order: [[Sequelize.literal('"sacramento"."fecha_sacramento"'), 'ASC']],
   });
   return rel?.sacramento?.fecha_sacramento
     ? new Date(rel.sacramento.fecha_sacramento)

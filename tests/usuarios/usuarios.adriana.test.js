@@ -44,8 +44,8 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await Usuario.destroy({ where: { email: `isabel.rocha.v@${DOMINIO_PERMITIDO}` } });
-  await Usuario.destroy({ where: { email: `test.eliminar@${DOMINIO_PERMITIDO}` } });
-  await Usuario.destroy({ where: { email: `test.desbloquear@${DOMINIO_PERMITIDO}` } });
+  await Usuario.destroy({ where: { email: `jesus.rocha@${DOMINIO_PERMITIDO}` } });
+  await Usuario.destroy({ where: { email: `irene.rocha@${DOMINIO_PERMITIDO}` } });
   await sequelize.close();
 }, 30000); 
 
