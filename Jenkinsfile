@@ -14,11 +14,6 @@ pipeline {
                     url: 'https://github.com/AdrianaRochaVedia/Back_Sacramentos'
             }
         }
-        stage('Instalar dependencias') {
-            steps {
-                sh 'npm install'
-            }
-        }
         stage('Deploy') {
             steps {
                 withCredentials([file(credentialsId: 'backend-env', variable: 'ENV_FILE')]) {
