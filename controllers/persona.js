@@ -7,6 +7,24 @@ const requisitos = require('../utils/sacramentos');
 const rolesReq = require('../utils/rolesSacramentos');
 const { combinarCondiciones } = require('../middlewares/busqueda');
 
+function normTexto(str) {
+  return (str || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+}
+
+function validarApellidoEnPadres({ nombre_padre, nombre_madre, apellido_paterno, apellido_materno }) {
+  if (nombre_padre && apellido_paterno) {
+    if (!normTexto(nombre_padre).includes(normTexto(apellido_paterno))) {
+      return { ok: false, msg: `El nombre del padre debe contener el apellido paterno "${apellido_paterno}"` };
+    }
+  }
+  if (nombre_madre && apellido_materno) {
+    if (!normTexto(nombre_madre).includes(normTexto(apellido_materno))) {
+      return { ok: false, msg: `El nombre de la madre debe contener el apellido materno "${apellido_materno}"` };
+    }
+  }
+  return { ok: true };
+}
+
 const tieneRol = (nombreRol) =>
   literal(`EXISTS (
     SELECT 1
@@ -164,6 +182,15 @@ const crearPersona = async (req, res) => {
       return res.status(400).json({ ok: false, msg: 'El carnet de identidad ya está registrado' });
     }
 
+    if (fecha_nacimiento && new Date(fecha_nacimiento) >= new Date()) {
+      return res.status(400).json({ ok: false, msg: 'La fecha de nacimiento no puede ser una fecha futura' });
+    }
+
+    const validacionPadres = validarApellidoEnPadres({ nombre_padre, nombre_madre, apellido_paterno, apellido_materno });
+    if (!validacionPadres.ok) {
+      return res.status(400).json({ ok: false, msg: validacionPadres.msg });
+    }
+
     const persona = await Persona.create({
       nombre,
       apellido_paterno,
@@ -273,6 +300,21 @@ const actualizarPersona = async (req, res) => {
         return res.status(400).json({ ok:false, msg:'El carnet de identidad ya está en uso' });
       }
     }
+
+    if (fecha_nacimiento && new Date(fecha_nacimiento) >= new Date()) {
+      return res.status(400).json({ ok: false, msg: 'La fecha de nacimiento no puede ser una fecha futura' });
+    }
+
+    const validacionPadres = validarApellidoEnPadres({
+      nombre_padre:      nombre_padre      ?? persona.nombre_padre,
+      nombre_madre:      nombre_madre      ?? persona.nombre_madre,
+      apellido_paterno:  apellido_paterno  ?? persona.apellido_paterno,
+      apellido_materno:  apellido_materno  ?? persona.apellido_materno,
+    });
+    if (!validacionPadres.ok) {
+      return res.status(400).json({ ok: false, msg: validacionPadres.msg });
+    }
+
     const updates = {};
     if (nombre !== undefined) updates.nombre = nombre;
     if (apellido_paterno !== undefined) updates.apellido_paterno = apellido_paterno;

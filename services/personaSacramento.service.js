@@ -11,7 +11,7 @@ const crearRelacionesSacramento = async ({
     sacramento_id_sacramento: id_sacramento,
   }));
 
-  return PersonaSacramento.bulkCreate(relacionesCrear, { transaction });
+  return PersonaSacramento.bulkCreate(relacionesCrear, { transaction, returning: false });
 };
 
 const sincronizarRelacionesSacramento = async ({

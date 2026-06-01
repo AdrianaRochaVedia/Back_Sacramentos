@@ -1,9 +1,43 @@
 const { response } = require('express');
 const Parroquia = require('../models/Parroquia');
-const Usuario = require('../models/Usuario'); 
+const Usuario = require('../models/Usuario');
 const Rol = require('../models/Rol');
 const UsuarioParroquia = require('../models/UsuarioParroquia');
 const { combinarCondiciones } = require('../middlewares/busqueda');
+
+async function auditarCambioEncargado({ encargadoAnterior, nuevoId, req, res }) {
+  try {
+    const nuevoUsuario = await Usuario.findByPk(nuevoId, {
+      attributes: ['id_usuario', 'nombre', 'apellido_paterno', 'apellido_materno', 'email']
+    });
+
+    const datoAnterior = encargadoAnterior
+      ? {
+          id_usuario:       encargadoAnterior.id_usuario,
+          nombre:           encargadoAnterior.nombre,
+          apellido_paterno: encargadoAnterior.apellido_paterno,
+          apellido_materno: encargadoAnterior.apellido_materno,
+          email:            encargadoAnterior.email,
+        }
+      : null;
+
+    const datoNuevo = nuevoUsuario
+      ? {
+          id_usuario:       nuevoUsuario.id_usuario,
+          nombre:           nuevoUsuario.nombre,
+          apellido_paterno: nuevoUsuario.apellido_paterno,
+          apellido_materno: nuevoUsuario.apellido_materno,
+          email:            nuevoUsuario.email,
+        }
+      : { id_usuario: nuevoId };
+
+    res.locals._instancia = { _datoAnterior: datoAnterior, _datoNuevo: datoNuevo };
+    res.locals._entidad   = 'parroquia_encargado';
+    res.locals._accion    = encargadoAnterior ? 'UPDATE' : 'CREATE';
+  } catch (e) {
+    console.warn('No se pudo registrar auditoría de encargado:', e?.message || e);
+  }
+}
 
 
 // Obtener todas las parroquias con búsqueda y filtros
@@ -285,18 +319,16 @@ const actualizarParroquia = async (req, res = response) => {
     await parroquia.update(updates);
 
     if (id_usuario !== undefined && id_usuario !== null) {
+      // Capturar encargado actual antes de reemplazarlo
+      const relacionAnterior = await UsuarioParroquia.findOne({
+        where: { id_parroquia: id, rol_en_parroquia: 'PARROCO', activo: true },
+        include: [{ model: Usuario, as: 'usuario', attributes: ['id_usuario', 'nombre', 'apellido_paterno', 'apellido_materno', 'email'] }]
+      });
+      const encargadoAnterior = relacionAnterior?.usuario ?? null;
+
       await UsuarioParroquia.update(
-        {
-          activo: false,
-          fecha_fin: new Date(),
-        },
-        {
-          where: {
-            id_parroquia: id,
-            rol_en_parroquia: 'PARROCO',
-            activo: true,
-          },
-        }
+        { activo: false, fecha_fin: new Date() },
+        { where: { id_parroquia: id, rol_en_parroquia: 'PARROCO', activo: true } }
       );
 
       await UsuarioParroquia.create({
@@ -305,6 +337,11 @@ const actualizarParroquia = async (req, res = response) => {
         rol_en_parroquia: 'PARROCO',
         activo: true,
       });
+
+      // Solo auditar si realmente cambió el encargado
+      if (!encargadoAnterior || encargadoAnterior.id_usuario !== Number(id_usuario)) {
+        await auditarCambioEncargado({ encargadoAnterior, nuevoId: id_usuario, req, res });
+      }
     }
 
     return res.json({

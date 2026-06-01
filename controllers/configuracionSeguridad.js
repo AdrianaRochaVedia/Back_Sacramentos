@@ -66,6 +66,7 @@ const actualizarConfiguracion = async (req, res) => {
         if (usa_captcha !== undefined) updates.usa_captcha = usa_captcha;
         updates.fecha_actualizacion = new Date();
 
+        res.locals._instancia = config;
         await config.update(updates);
         res.json({ ok: true, msg: 'Configuración actualizada correctamente', configuracion: config });
 

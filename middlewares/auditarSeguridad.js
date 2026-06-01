@@ -4,7 +4,7 @@ const AuditoriaSeguridad = require('../models/AuditoriaSeguridad');
  * Registra un evento de seguridad. Llamar directamente desde el controlador de auth.
  *
  * @param {object} opciones
- * @param {'LOGIN_OK'|'LOGIN_FAIL'|'LOGOUT'|'PASSWORD_CHANGE'|'TOKEN_REFRESH'|'ACCESS_DENIED'} opciones.evento
+ * @param {'LOGIN_OK'|'LOGIN_FAIL'|'LOGOUT'|'PASSWORD_CHANGE'|'TOKEN_REFRESH'|'ACCESS_DENIED'|'ROLE_CHANGE'} opciones.evento
  * @param {boolean} opciones.exitoso
  * @param {string}  [opciones.username]
  * @param {string}  [opciones.detalle]    - Razón del fallo, mensaje de error, etc.

@@ -34,7 +34,7 @@ const crearOActualizarMatrimonioDetalle = async ({
       reg_civil: matrimonioDetalle.reg_civil,
       numero_acta: matrimonioDetalle.numero_acta,
     },
-    { transaction }
+    { transaction, returning: false }
   );
 };
 

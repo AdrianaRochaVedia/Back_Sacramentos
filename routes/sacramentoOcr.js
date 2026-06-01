@@ -13,7 +13,7 @@ const router = Router();
 router.post(
     '/preview',
     validarJWT,
-    validarPermiso('CREAR_SACRAMENTO'),
+    validarPermiso('REGISTRAR_OCR'),
     upload.single('imagen'),
     [
         check('tipo_sacramento_id', 'El tipo de sacramento es obligatorio').isInt(),
@@ -26,7 +26,7 @@ router.post(
 router.post(
     '/confirmar',
     validarJWT,
-    validarPermiso('CREAR_SACRAMENTO'),
+    validarPermiso('REGISTRAR_OCR'),
     [
         check('historico_id', 'El historico_id es obligatorio').isInt(),
         check('fecha_sacramento', 'La fecha del sacramento es obligatoria').notEmpty(),

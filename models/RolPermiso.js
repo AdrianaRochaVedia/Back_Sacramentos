@@ -25,6 +25,11 @@ const RolPermiso = sequelize.define('RolPermiso', {
     },
     onDelete: 'CASCADE'
   },
+  visible_en_menu: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: true
+  },
   fecha_registro: {
     type: DataTypes.DATE,
     allowNull: false,

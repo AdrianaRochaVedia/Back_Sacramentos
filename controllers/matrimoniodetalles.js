@@ -122,6 +122,7 @@ const actualizarMatrimonioDetalle = async (req, res = response) => {
         if (lugar_ceremonia !== undefined) updates.lugar_ceremonia = lugar_ceremonia;
         if (numero_acta !== undefined) updates.numero_acta = numero_acta;
 
+        res.locals._instancia = matrimonioDetalle;
         await matrimonioDetalle.update(updates);
         return res.json({
             ok: true,

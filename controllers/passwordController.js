@@ -46,7 +46,7 @@ exports.solicitar = async (req, res) => {
       const tpl      = resetPasswordEmail({ appName, resetUrl: url, minutes: TOKEN_TTL_MINUTES });
       await sendMail({ to: email, subject: tpl.subject, html: tpl.html, text: tpl.text });
     } catch (mailErr) {
-      console.warn('Error enviando email de reset:', mailErr?.message || mailErr);
+      return res.status(400).json({ ok: false, msg: 'No se pudo enviar el correo de recuperación. Verifica que la dirección sea válida.' });
     }
 
     // ── Auditoría ────────────────────────────────────────────────
@@ -82,11 +82,16 @@ exports.validar = async (req, res) => {
     });
 
     if (!registro) {
-      // ── Auditoría: token inválido o expirado ──────────────────
+      const registroExpirado = await PasswordReset.findOne({ where: { token_hash } });
+      let usernameAudit = null;
+      if (registroExpirado) {
+        const usuarioExpirado = await Usuario.findByPk(registroExpirado.id_usuario, { attributes: ['email'] });
+        usernameAudit = usuarioExpirado?.email || null;
+      }
       await auditarSeguridad({
         evento:  'PASSWORD_TOKEN_INVALIDO',
         exitoso: false,
-        username: null,
+        username: usernameAudit,
         detalle: 'Token de reset inválido o expirado al validar',
         req,
       });
@@ -130,11 +135,16 @@ exports.cambiar = async (req, res) => {
     });
 
     if (!registro) {
-      // ── Auditoría: token inválido al cambiar ──────────────────
+      const registroExpirado = await PasswordReset.findOne({ where: { token_hash } });
+      let usernameAudit = null;
+      if (registroExpirado) {
+        const usuarioExpirado = await Usuario.findByPk(registroExpirado.id_usuario, { attributes: ['email'] });
+        usernameAudit = usuarioExpirado?.email || null;
+      }
       await auditarSeguridad({
         evento:  'PASSWORD_TOKEN_INVALIDO',
         exitoso: false,
-        username: null,
+        username: usernameAudit,
         detalle: 'Token de reset inválido o expirado al cambiar contraseña',
         req,
       });
@@ -142,12 +152,13 @@ exports.cambiar = async (req, res) => {
     }
 
     const usuario = await Usuario.findOne({ where: { id_usuario: registro.id_usuario, activo: true } });
+    const usernameForAudit = usuario ? usuario.email : null;
 
     if (!usuario) {
       await auditarSeguridad({
         evento:  'PASSWORD_CHANGE_FAIL',
         exitoso: false,
-        username: null,
+        username: usernameForAudit,
         detalle: 'Usuario no válido al cambiar contraseña',
         req,
       });

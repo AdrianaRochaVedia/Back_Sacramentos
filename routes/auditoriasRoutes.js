@@ -38,19 +38,26 @@ function buildRango(start_date, end_date) {
 }
 
 async function enriquecerConNombre(rows) {
-  return Promise.all(
-    rows.map(async (r) => {
-      let nombre_usuario = null;
-      if (r.username) {
-        const user = await Usuario.findOne({ where: { email: r.username } });
-        if (user) {
-          nombre_usuario = [user.nombre, user.apellido_paterno, user.apellido_materno]
-            .filter(Boolean).join(' ');
-        }
-      }
-      return { ...r.dataValues, nombre_usuario };
-    })
-  );
+  const emails = [...new Set(rows.map(r => r.username).filter(Boolean))];
+
+  const mapaUsuarios = new Map();
+  if (emails.length) {
+    const usuarios = await Usuario.findAll({
+      where: { email: { [Op.in]: emails } },
+      attributes: ['email', 'nombre', 'apellido_paterno', 'apellido_materno'],
+    });
+    for (const u of usuarios) {
+      mapaUsuarios.set(
+        u.email,
+        [u.nombre, u.apellido_paterno, u.apellido_materno].filter(Boolean).join(' ')
+      );
+    }
+  }
+
+  return rows.map(r => ({
+    ...r.dataValues,
+    nombre_usuario: r.username ? (mapaUsuarios.get(r.username) ?? null) : null,
+  }));
 }
 
 function paginacion(query) {
@@ -61,7 +68,7 @@ function paginacion(query) {
 
 // ─── GET /api/auditoria/aplicacion ────────────────────────────────────────────
 
-router.get('/aplicacion', validarJWT, validarPermiso('VER_AUDITORIA'), async (req, res) => {
+router.get('/aplicacion', validarJWT, validarPermiso('VER_AUDITORIA_APLICACION'), async (req, res) => {
   try {
     const {
       start_date, end_date,
@@ -149,7 +156,7 @@ router.get('/aplicacion', validarJWT, validarPermiso('VER_AUDITORIA'), async (re
 // ─── GET /api/auditoria/aplicacion/:id ────────────────────────────────────────
 // Detalle de un registro, incluye dato_anterior, dato_nuevo y campos_modificados
 
-router.get('/aplicacion/:id', validarJWT, validarPermiso('VER_AUDITORIA'), async (req, res) => {
+router.get('/aplicacion/:id', validarJWT, validarPermiso('VER_AUDITORIA_APLICACION'), async (req, res) => {
   try {
     const registro = await AuditoriaAplicacion.findByPk(req.params.id);
     if (!registro) return res.status(404).json({ ok: false, msg: 'Registro no encontrado' });
@@ -172,7 +179,7 @@ router.get('/aplicacion/:id', validarJWT, validarPermiso('VER_AUDITORIA'), async
 
 // ─── GET /api/auditoria/seguridad ─────────────────────────────────────────────
 
-router.get('/seguridad', validarJWT, validarPermiso('VER_AUDITORIA'), async (req, res) => {
+router.get('/seguridad', validarJWT, validarPermiso('VER_AUDITORIA_SEGURIDAD'), async (req, res) => {
   try {
     const {
       start_date, end_date,

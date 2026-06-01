@@ -7,8 +7,8 @@ const { validarPermiso } = require('../middlewares/validarPermiso');
 
 const router = Router();
 
-router.get('/', getConfiguracion);
-
+router.get('/', validarJWT, validarPermiso('VER_CONFIG_SEGURIDAD'), getConfiguracion);
+router.get('/reset', getConfiguracion);
 router.put(
   '/',
   validarJWT,

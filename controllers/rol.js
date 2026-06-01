@@ -1,4 +1,5 @@
 const { Op } = require('sequelize');
+const { sequelize } = require('../database/config');
 const Rol = require('../models/Rol');
 const Usuario = require('../models/Usuario');
 const Permiso = require('../models/Permisos');
@@ -13,7 +14,7 @@ const getRoles = async (req, res) => {
                 model: Permiso,
                 as: 'permisos',
                 attributes: ['id_permiso', 'nombre'],
-                through: { attributes: ['fecha_registro'] }
+                through: { attributes: ['visible_en_menu', 'fecha_registro'] }
             }],
             order: [['id_rol', 'ASC']]
         });
@@ -37,7 +38,7 @@ const getRolById = async (req, res) => {
                 model: Permiso,
                 as: 'permisos',
                 attributes: ['id_permiso', 'nombre'],
-                through: { attributes: ['fecha_registro'] }
+                through: { attributes: ['visible_en_menu', 'fecha_registro'] }
             }]
         });
 
@@ -54,6 +55,13 @@ const getRolById = async (req, res) => {
 };
 
 //Verificar su ya existe un rol con los mismos permisos para que no deje crear otro
+const normalizarIds = (lista) =>
+    lista
+        .map(p => Number(typeof p === 'object' ? p.id_permiso : p))
+        .filter(Boolean)
+        .sort((a, b) => a - b)
+        .join(',');
+
 const verificarPermisosRepetidos = async (permisosIds, excludeRolId = null) => {
     const roles = await Rol.findAll({
         where: {
@@ -67,10 +75,10 @@ const verificarPermisosRepetidos = async (permisosIds, excludeRolId = null) => {
         }]
     });
 
-    const permisosOrdenados = [...permisosIds].sort().join(',');
+    const permisosOrdenados = normalizarIds(permisosIds);
 
     const rolDuplicado = roles.find(rol => {
-        const permisosRol = rol.permisos.map(p => p.id_permiso).sort().join(',');
+        const permisosRol = normalizarIds(rol.permisos);
         return permisosRol === permisosOrdenados;
     });
 
@@ -97,9 +105,10 @@ const crearRol = async (req, res) => {
 
         const rol = await Rol.create({ nombre, descripcion });
         if (permisos.length > 0) {
-            const rolPermisos = permisos.map(id_permiso => ({
+            const rolPermisos = permisos.map(p => ({
                 id_rol: rol.id_rol,
-                id_permiso
+                id_permiso: typeof p === 'object' ? p.id_permiso : p,
+                visible_en_menu: typeof p === 'object' ? (p.visible_en_menu ?? true) : true
             }));
             await RolPermiso.bulkCreate(rolPermisos);
         }
@@ -109,7 +118,7 @@ const crearRol = async (req, res) => {
                 model: Permiso,
                 as: 'permisos',
                 attributes: ['id_permiso', 'nombre'],
-                through: { attributes: ['fecha_registro'] }
+                through: { attributes: ['visible_en_menu', 'fecha_registro'] }
             }]
         });
 
@@ -177,6 +186,15 @@ const actualizarRol = async (req, res) => {
       }
     }
 
+    const includePermisos = [{
+      model: Permiso,
+      as: 'permisos',
+      attributes: ['id_permiso', 'nombre'],
+      through: { attributes: ['visible_en_menu', 'fecha_registro'] }
+    }];
+
+    const rolPrevio = await Rol.findByPk(id, { include: includePermisos });
+
     const updates = {};
 
     if (nombre !== undefined) updates.nombre = nombre;
@@ -185,31 +203,40 @@ const actualizarRol = async (req, res) => {
       updates.activo = activo === true || activo === 'true';
     }
 
+    res.locals._instancia = rol;
     await rol.update(updates);
 
     if (permisos !== undefined) {
-      await RolPermiso.destroy({ where: { id_rol: id } });
+      await sequelize.transaction(async (t) => {
+        const existentes = await RolPermiso.findAll({ where: { id_rol: id }, transaction: t });
+        const mapaExistentes = Object.fromEntries(
+          existentes.map(rp => [rp.id_permiso, rp.visible_en_menu])
+        );
 
-      if (permisos.length > 0) {
-        const rolPermisos = permisos.map((id_permiso) => ({
-          id_rol: parseInt(id),
-          id_permiso
-        }));
+        await RolPermiso.destroy({ where: { id_rol: id }, transaction: t });
 
-        await RolPermiso.bulkCreate(rolPermisos);
-      }
+        if (permisos.length > 0) {
+          const rolPermisos = permisos.map(p => {
+            const idPermiso = typeof p === 'object' ? p.id_permiso : p;
+            const visibleExplicito = typeof p === 'object' ? p.visible_en_menu : undefined;
+            const visiblePrevio = mapaExistentes[idPermiso];
+            const visible = visibleExplicito !== undefined && visibleExplicito !== null
+              ? visibleExplicito
+              : visiblePrevio !== undefined
+                ? visiblePrevio
+                : true;
+            return { id_rol: parseInt(id), id_permiso: idPermiso, visible_en_menu: visible };
+          });
+
+          await RolPermiso.bulkCreate(rolPermisos, { transaction: t });
+        }
+      });
     }
 
-    const rolActualizado = await Rol.findByPk(id, {
-      include: [
-        {
-          model: Permiso,
-          as: 'permisos',
-          attributes: ['id_permiso', 'nombre'],
-          through: { attributes: ['fecha_registro'] }
-        }
-      ]
-    });
+    const rolActualizado = await Rol.findByPk(id, { include: includePermisos });
+
+    res.locals._instancia._datoAnterior = rolPrevio.get({ plain: true });
+    res.locals._instancia._datoNuevo    = rolActualizado.get({ plain: true });
 
     return res.json({
       ok: true,
