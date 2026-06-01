@@ -19,16 +19,6 @@ pipeline {
                 sh 'npm install'
             }
         }
-        // stage('Test') {
-        //     steps {
-        //         withCredentials([file(credentialsId: 'backend-env', variable: 'ENV_FILE')]) {
-        //             sh '''
-        //                 cp $ENV_FILE .env
-        //                 npm test
-        //             '''
-        //         }
-        //     }
-        // }
         stage('Deploy') {
             steps {
                 withCredentials([file(credentialsId: 'backend-env', variable: 'ENV_FILE')]) {
