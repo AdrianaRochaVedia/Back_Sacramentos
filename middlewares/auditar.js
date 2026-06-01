@@ -40,12 +40,17 @@ module.exports = function auditar() {
     const method = (req.method || 'GET').toUpperCase();
     const url = req.originalUrl || req.url || '/';
     const userAgent = req.headers['user-agent'] || null;
-    const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim()
-           || req.headers['x-real-ip']
-           || req.ip
-           || req.socket?.remoteAddress
-           || req.connection?.remoteAddress
-           || null;
+    const xff = req.headers['x-forwarded-for'];
+let ip = null;
+
+if (xff) {
+  ip = xff.split(',')[0].trim();
+} else {
+  ip = req.headers['x-real-ip']
+    || req.ip
+    || req.socket?.remoteAddress
+    || null;
+}
 
     const applicationName = process.env.APP_NAME || 'Sacramentos';
     const correlationId = req.correlationId || null;

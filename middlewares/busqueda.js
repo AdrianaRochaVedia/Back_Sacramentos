@@ -1,29 +1,65 @@
 // middlewares/busqueda.js
 const { Op, literal } = require('sequelize');
+const formatearCampoSQL = (campo) => {
+  if (campo.includes('.')) {
+    return campo
+      .split('.')
+      .map((parte) => `"${parte}"`)
+      .join('.');
+  }
+
+  return `"${campo}"`;
+};
 
 const generarCondicionesBusqueda = (searchTerm, camposBusqueda) => {
   if (!searchTerm || !camposBusqueda || camposBusqueda.length === 0) {
     return {};
   }
 
-  const terminoNormalizado = searchTerm.trim().toLowerCase();
+  const termino = searchTerm.trim().toLowerCase();
 
-  const condicionesBasicas = camposBusqueda.map(campo => ({
-    [campo]: {
-      [Op.iLike]: `%${terminoNormalizado}%`
+  const esNumero = /^\d+$/.test(termino);
+  const esFecha = /^\d{4}(-\d{1,2}){0,2}$/.test(termino);
+
+  const condiciones = [];
+
+  camposBusqueda.forEach(campo => {
+    const campoSQL = formatearCampoSQL(campo);
+
+    const esFechaCampo = campo.includes("fecha");
+    const esNumericoCampo = campo.includes("numero") || campo.startsWith("id_");
+    const esCICampo = campo.includes("ci") || campo.includes("carnet");
+
+    if (esNumero) {
+      if (esCICampo || esNumericoCampo) {
+        condiciones.push(
+          literal(`unaccent(LOWER(CAST(${campoSQL} AS TEXT))) LIKE unaccent(LOWER('%${termino}%'))`)
+        );
+      }
+      return;
     }
-  }));
 
-  const condicionesUnaccent = camposBusqueda.map(campo => 
-    literal(`unaccent(LOWER(CAST(${campo} AS TEXT))) LIKE unaccent(LOWER('%${terminoNormalizado}%'))`)
-  );
+    if (esFecha) {
+      if (esFechaCampo) {
+        condiciones.push(
+          literal(`CAST(${campoSQL} AS TEXT) ILIKE '%${termino}%'`)
+        );
+      }
+      return;
+    }
 
-  return {
-    [Op.or]: [
-      ...condicionesBasicas,
-      ...condicionesUnaccent
-    ]
-  };
+    if (!esFechaCampo) {
+      condiciones.push(
+        literal(`unaccent(LOWER(CAST(${campoSQL} AS TEXT))) LIKE unaccent(LOWER('%${termino}%'))`)
+      );
+    }
+  });
+
+  if (condiciones.length === 0) {
+    condiciones.push(literal("false"));
+  }
+
+  return { [Op.or]: condiciones };
 };
 
 
@@ -34,10 +70,13 @@ const generarCondicionesBusquedaDifusa = (searchTerm, camposBusqueda, umbralSimi
 
   const terminoNormalizado = searchTerm.trim().toLowerCase();
   
-  const condicionesSimilitud = camposBusqueda.map(campo => 
-    literal(`similarity(unaccent(LOWER(CAST(${campo} AS TEXT))), unaccent(LOWER('${terminoNormalizado}'))) > ${umbralSimilitud}`)
-  );
+  const condicionesSimilitud = camposBusqueda.map(campo => {
+    const campoSQL = formatearCampoSQL(campo);
 
+    return literal(
+      `similarity(unaccent(LOWER(CAST(${campoSQL} AS TEXT))), unaccent(LOWER('${terminoNormalizado}'))) > ${umbralSimilitud}`
+    );
+  });
   return {
     [Op.or]: condicionesSimilitud
   };

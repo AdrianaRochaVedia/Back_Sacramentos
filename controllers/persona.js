@@ -1,6 +1,55 @@
 const { response } = require('express');
+const {Op,literal} = require('sequelize');
 const Persona = require('../models/Persona');
+const PersonaSacramento = require('../models/PersonaSacramento');
+const RolSacramento = require('../models/RolSacramento');
+const requisitos = require('../utils/sacramentos');
+const rolesReq = require('../utils/rolesSacramentos');
 const { combinarCondiciones } = require('../middlewares/busqueda');
+
+function normTexto(str) {
+  return (str || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+}
+
+function validarApellidoEnPadres({ nombre_padre, nombre_madre, apellido_paterno, apellido_materno }) {
+  if (nombre_padre && apellido_paterno) {
+    if (!normTexto(nombre_padre).includes(normTexto(apellido_paterno))) {
+      return { ok: false, msg: `El nombre del padre debe contener el apellido paterno "${apellido_paterno}"` };
+    }
+  }
+  if (nombre_madre && apellido_materno) {
+    if (!normTexto(nombre_madre).includes(normTexto(apellido_materno))) {
+      return { ok: false, msg: `El nombre de la madre debe contener el apellido materno "${apellido_materno}"` };
+    }
+  }
+  return { ok: true };
+}
+
+const tieneRol = (nombreRol) =>
+  literal(`EXISTS (
+    SELECT 1
+    FROM   persona_sacramento  ps
+    JOIN   rol_sacramento      rs ON rs.id_rol_sacra = ps.rol_sacramento_id_rol_sacra
+    WHERE  ps.persona_id_persona = "Persona"."id_persona"
+    AND    UPPER(rs.nombre)      = '${nombreRol.toUpperCase()}'
+  )`);
+const noTieneRol = (nombreRol) =>
+  literal(`NOT EXISTS (
+    SELECT 1
+    FROM   persona_sacramento  ps
+    JOIN   rol_sacramento      rs ON rs.id_rol_sacra = ps.rol_sacramento_id_rol_sacra
+    WHERE  ps.persona_id_persona = "Persona"."id_persona"
+    AND    UPPER(rs.nombre)      = '${nombreRol.toUpperCase()}'
+  )`);
+
+const buildReglasWhere = ({ requeridos = [], excluir = [] }) => [
+  ...requeridos.map(tieneRol),
+  ...excluir.map(noTieneRol),
+];
+const TABLAS_REGLAS = {
+  sacramento: requisitos,
+  rol:        rolesReq,
+};
 
 const getPersonas = async (req, res = response) => {
     try {
@@ -49,7 +98,15 @@ const getPersonas = async (req, res = response) => {
             activo: activo !== undefined ? activo : true 
         };
         
-        const whereConditions = combinarCondiciones(search, camposBusqueda, filtros);
+        let whereConditions = combinarCondiciones(search, camposBusqueda, filtros);
+
+        // Permitir búsqueda parcial y case-insensitive por carnet_identidad si no hay 'search'
+        if (carnet_identidad && !search) {
+            whereConditions = {
+                ...whereConditions,
+                carnet_identidad: { [Op.iLike]: `%${carnet_identidad}%` }
+            };
+        }
 
         const { count, rows } = await Persona.findAndCountAll({
             where: whereConditions,
@@ -123,6 +180,15 @@ const crearPersona = async (req, res) => {
     const existe = await Persona.findOne({ where: { carnet_identidad } });
     if (existe) {
       return res.status(400).json({ ok: false, msg: 'El carnet de identidad ya está registrado' });
+    }
+
+    if (fecha_nacimiento && new Date(fecha_nacimiento) >= new Date()) {
+      return res.status(400).json({ ok: false, msg: 'La fecha de nacimiento no puede ser una fecha futura' });
+    }
+
+    const validacionPadres = validarApellidoEnPadres({ nombre_padre, nombre_madre, apellido_paterno, apellido_materno });
+    if (!validacionPadres.ok) {
+      return res.status(400).json({ ok: false, msg: validacionPadres.msg });
     }
 
     const persona = await Persona.create({
@@ -214,12 +280,14 @@ const actualizarPersona = async (req, res) => {
     lugar_nacimiento,
     nombre_padre,
     nombre_madre,
-    estado
+    estado,
+    activo,
+    sacerdote
   } = req.body;
 
   try {
     const persona = await Persona.findOne({
-      where: { id_persona: id, activo: true }
+      where: { id_persona: id }
     });
 
     if (!persona) {
@@ -232,6 +300,21 @@ const actualizarPersona = async (req, res) => {
         return res.status(400).json({ ok:false, msg:'El carnet de identidad ya está en uso' });
       }
     }
+
+    if (fecha_nacimiento && new Date(fecha_nacimiento) >= new Date()) {
+      return res.status(400).json({ ok: false, msg: 'La fecha de nacimiento no puede ser una fecha futura' });
+    }
+
+    const validacionPadres = validarApellidoEnPadres({
+      nombre_padre:      nombre_padre      ?? persona.nombre_padre,
+      nombre_madre:      nombre_madre      ?? persona.nombre_madre,
+      apellido_paterno:  apellido_paterno  ?? persona.apellido_paterno,
+      apellido_materno:  apellido_materno  ?? persona.apellido_materno,
+    });
+    if (!validacionPadres.ok) {
+      return res.status(400).json({ ok: false, msg: validacionPadres.msg });
+    }
+
     const updates = {};
     if (nombre !== undefined) updates.nombre = nombre;
     if (apellido_paterno !== undefined) updates.apellido_paterno = apellido_paterno;
@@ -242,10 +325,13 @@ const actualizarPersona = async (req, res) => {
     if (nombre_padre !== undefined) updates.nombre_padre = nombre_padre;
     if (nombre_madre !== undefined) updates.nombre_madre = nombre_madre;
     if (estado !== undefined) updates.estado = estado;
+    if (activo !== undefined) updates.activo = activo;
+    if (sacerdote !== undefined) updates.sacerdote = sacerdote;
 
     if (Object.keys(updates).length === 0) {
       return res.status(400).json({ ok:false, msg:'No se enviaron campos a actualizar' });
     }
+    res.locals._instancia = persona;
 
     const personaActualizada = await persona.update(updates);
 
@@ -276,6 +362,7 @@ const eliminarPersona = async (req, res = response) => {
                 msg: 'Persona no encontrada'
             });
         }
+        res.locals._instancia = persona;
 
         await persona.update({ activo: false });
 
@@ -292,11 +379,73 @@ const eliminarPersona = async (req, res = response) => {
     }
 };
 
+//intento endpoint para todos los sacramentos 
+const buscarPersonasParaSacramento = async (req, res) => {
+  try {
+    let { search, rol: claveRol, tipo = "sacramento" } = req.query;
+ 
+    // --- Validación de parámetros ---
+    if (!search?.trim() || !claveRol?.trim()) {
+      return res.status(400).json({ ok: false, msg: "Faltan parámetros: search y rol son obligatorios" });
+    }
+ 
+    tipo     = tipo.toLowerCase();
+    claveRol = claveRol.toLowerCase();
+ 
+    const tablaReglas = TABLAS_REGLAS[tipo];
+    if (!tablaReglas) {
+      return res.status(400).json({ ok: false, msg: "Tipo inválido — use 'sacramento' o 'rol'" });
+    }
+ 
+    // Búsqueda de clave insensible a mayúsculas
+    const claveReal = Object.keys(tablaReglas).find(
+      (k) => k.toLowerCase() === claveRol
+    );
+    if (!claveReal) {
+      return res.status(400).json({ ok: false, msg: `Rol o sacramento desconocido: '${claveRol}'` });
+    }
+ 
+    const regla = tablaReglas[claveReal];
+ 
+    // --- Consulta con todo el filtrado en la BD ---
+    const personas = await Persona.findAll({
+      attributes: [
+        "id_persona",
+        "nombre",
+        "apellido_paterno",
+        "apellido_materno",
+        "carnet_identidad",
+      ],
+      where: {
+        activo: true,
+ 
+        // Búsqueda de texto
+        [Op.or]: [
+          { nombre:           { [Op.iLike]: `%${search}%` } },
+          { apellido_paterno: { [Op.iLike]: `%${search}%` } },
+          { apellido_materno: { [Op.iLike]: `%${search}%` } },
+          { carnet_identidad: { [Op.iLike]: `%${search}%` } },
+        ],
+ 
+        // Reglas de sacramentos — todo resuelto en SQL, sin filtro en JS
+        [Op.and]: buildReglasWhere(regla),
+      },
+    });
+ 
+    return res.json({ ok: true, personas });
+ 
+  } catch (error) {
+    console.error("Error en buscarPersonasParaSacramento:", error);
+    return res.status(500).json({ ok: false, msg: "Error interno en búsqueda" });
+  }
+};
+
   module.exports = {
     getPersonas,
     crearPersona,
     getPersona,
     actualizarPersona,
     eliminarPersona,
-    getAllPersonas
+    getAllPersonas,
+    buscarPersonasParaSacramento
   };

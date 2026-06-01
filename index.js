@@ -1,11 +1,10 @@
-// index.js
 require('dotenv').config();
 const app = require('./app');
 const { dbConnection } = require('./database/config');
 
 const startServer = async () => {
   try {
-    await dbConnection(); // Solo se conecta, no sincroniza
+    await dbConnection();
 
     const PORT = process.env.PORT || 3000;
     app.listen(PORT, () => {
@@ -16,4 +15,8 @@ const startServer = async () => {
   }
 };
 
-startServer();
+if (require.main === module) {
+  startServer();
+}
+
+module.exports = { app, dbConnection };

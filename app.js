@@ -1,239 +1,181 @@
 // app.js
-const express = require('express');
-const cors = require('cors');
-const swaggerUi = require('swagger-ui-express');
+'use strict';
+
+const express    = require('express');
+const cors       = require('cors');
+const helmet     = require('helmet');
+const fetch      = require('node-fetch');
+const swaggerUi  = require('swagger-ui-express');
 const swaggerJsdoc = require('swagger-jsdoc');
-const fetch = require('node-fetch');
-const helmet = require('helmet');
-const passwordRoutes = require('./routes/passwordRoutes');
-const audRoutes = require('./routes/auditoriaRoutes');
-const errorHandler = require('./middlewares/error-handler');
+
+// ── Middlewares propios ───────────────────────────────────────────
+const correlation       = require('./middlewares/correlation');
+const auditarAplicacion = require('./middlewares/auditarAplicacion');
+const errorHandler      = require('./middlewares/error-handler');
+
+// ── Modelos y relaciones ──────────────────────────────────────────
+require('./models/Associations');
+
+// ─────────────────────────────────────────────────────────────────
 const app = express();
 const dashboardRoutes = require('./routes/dashboardRoutes');
+const dominioPermitidoRoute = require('./routes/dominioPermitidoRoute');
+const usuarioParroquiaRoute = require('./routes/usuarioParroquia');
 
+app.set('trust proxy', true);
+app.disable('x-powered-by');
 
-app.use(cors());
-app.use(express.static('public'));
-app.use(express.json());
-// ... después de app = express() y middlewares base:
-const correlation = require('./middlewares/correlation');
-const auditar = require('./middlewares/auditar');
+// ── CORS ──────────────────────────────────────────────────────────
+const ALLOWED_ORIGINS = [
+  'http://localhost:5173',
+  'https://fronttaller0.vercel.app',
+  'http://sacra360.s3-website-us-east-1.amazonaws.com','https://reportes-t86w.onrender.com/graphql',
+];
 
-app.use(correlation());  // 1) genera/propaga x-correlation-id
-app.use(auditar());      // 2) registra TODAS las rutas
+app.use(cors({
+  origin:         ALLOWED_ORIGINS,
+  methods:        ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'x-token'],
+  credentials:    true,
+}));
 
+// ── Helmet ────────────────────────────────────────────────────────
+const IS_PROD = process.env.NODE_ENV === 'production';
 
-// Helmet
 app.use(helmet({
   contentSecurityPolicy: {
     useDefaults: true,
     directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: [
-        "'self'", 
-        "'unsafe-inline'", 
-        'https://fonts.googleapis.com',
-        'https://fonts.gstatic.com'
-      ],
-      fontSrc: [
-        "'self'", 
-        'https://fonts.gstatic.com'
-      ],
-      scriptSrc: [
-        "'self'", 
-        "'unsafe-inline'" // Solo para Swagger, considera quitarlo en producción
-      ],
-      imgSrc: [
-        "'self'", 
-        'data:', 
-        'https:'
-      ],
-      connectSrc: [
-        "'self'", 
-        'http://localhost:3000',
-        'http://localhost:5173', // Permite conexiones locales para desarrollo
-        'https://api.tu-dominio.com', // Reemplaza con tu API real
-        'https://*', // Permite conexiones HTTPS externas para el proxy
-        'http://*'   // Permite conexiones HTTP externas para el proxy (opcional, solo si necesitas HTTP)
-      ],
-      objectSrc: ["'none'"],
-      baseUri: ["'self'"],
-      formAction: ["'self'"],
-      frameAncestors: ["'deny'"], // Más restrictivo que 'self'
-      upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null,
+      defaultSrc:   ["'self'"],
+      styleSrc:     ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://fonts.gstatic.com'],
+      fontSrc:      ["'self'", 'https://fonts.gstatic.com'],
+      scriptSrc:    ["'self'", "'unsafe-inline'"],
+      imgSrc:       ["'self'", 'data:', 'https:'],
+      connectSrc:   ["'self'", ...ALLOWED_ORIGINS, 'https://back-sacramentos.onrender.com','https://reportes-t86w.onrender.com/graphql','https://*', 'http://*'],
+      objectSrc:    ["'none'"],
+      baseUri:      ["'self'"],
+      formAction:   ["'self'"],
+      frameAncestors: ["'deny'"],
+      upgradeInsecureRequests: IS_PROD ? [] : null,
     },
   },
-  
-  // HSTS - HTTP Strict Transport Security
-  hsts: process.env.NODE_ENV === 'production' ? {
-    maxAge: 31536000, // 1 año
-    includeSubDomains: true,
-    preload: true
-  } : false,
-  
-  // X-Frame-Options - Previene clickjacking
-  frameguard: { 
-    action: 'deny'
-  },
-  
-  // X-Content-Type-Options - Previene MIME sniffing
-  noSniff: true,
-  
-  // Ocultar X-Powered-By
-  hidePoweredBy: true,
-  
-  // X-XSS-Protection
-  xssFilter: true,
-  
-  // Referrer Policy
-  referrerPolicy: { 
-    policy: "strict-origin-when-cross-origin" 
-  },
-  
-  // Cross-Origin Policies
-  crossOriginOpenerPolicy: { 
-    policy: "same-origin" 
-  },
-  
-  crossOriginResourcePolicy: { 
-    policy: "same-origin" 
-  },
-  
-  // Origin Agent Cluster
-  originAgentCluster: true,
-  
-  // X-DNS-Prefetch-Control
-  dnsPrefetchControl: { 
-    allow: false 
-  },
-  
-  // X-Download-Options
-  ieNoOpen: true,
-  
-  // X-Permitted-Cross-Domain-Policies
-  permittedCrossDomainPolicies: false
+  hsts:                      IS_PROD ? { maxAge: 31536000, includeSubDomains: true, preload: true } : false,
+  frameguard:                { action: 'deny' },
+  noSniff:                   true,
+  hidePoweredBy:             true,
+  xssFilter:                 true,
+  referrerPolicy:            { policy: 'strict-origin-when-cross-origin' },
+  crossOriginOpenerPolicy:   { policy: 'same-origin' },
+  crossOriginResourcePolicy: { policy: 'same-origin' },
+  originAgentCluster:        true,
+  dnsPrefetchControl:        { allow: false },
+  ieNoOpen:                  true,
+  permittedCrossDomainPolicies: false,
 }));
 
-//X-Powered-By no se muestre
-app.disable('x-powered-by');
+// ── Body / static ─────────────────────────────────────────────────
+app.use(express.static('public'));
+app.use(express.json());
 
-// Swagger configuration
-const swaggerOptions = {
+// ── Middlewares globales ──────────────────────────────────────────
+app.use(correlation());
+app.use(auditarAplicacion());
+
+// ── Swagger ───────────────────────────────────────────────────────
+const swaggerSpec = swaggerJsdoc({
   definition: {
     openapi: '3.0.3',
     info: {
-      title: 'Documentación API proyecto Integrador MIGA',
+      title:       'Documentación API proyecto Integrador MIGA',
       description: 'API para manejar usuarios, documentos, comentarios y propuestas ciudadanas de MIGA.',
-      version: '1.0.0',
-      contact: {
-        name: 'Soporte API MIGA',
-        email: 'soporte@miga.com' // email-real
-      }
+      version:     '1.0.0',
+      contact:     { name: 'Soporte API MIGA', email: 'soporte@miga.com' },
     },
     servers: [
-      { 
-        url: process.env.NODE_ENV === 'production' 
-          ? 'https://api.tu-dominio.com' 
-          : 'http://localhost:3000', 
-        description: process.env.NODE_ENV === 'production' ? 'Servidor de producción' : 'Servidor local' 
+      {
+        url:         IS_PROD ? 'https://back-sacramentos.onrender.com' : 'http://localhost:3000',
+        description: IS_PROD ? 'Servidor de producción' : 'Servidor local',
+      },
+      {
+        url:         'https://reportes-t86w.onrender.com/graphql',
+        description:  'Servidor GraphQL',
       },
     ],
     components: {
       securitySchemes: {
-        xToken: { 
-          type: 'apiKey',
-          in: 'header',
-          name: 'x-token',
-          description: 'Token personalizado para autenticación (x-token)',
-        },
+        xToken: { type: 'apiKey', in: 'header', name: 'x-token', description: 'Token de autenticación' },
       },
     },
-    security: [{
-      xToken: [],
-    }],
+    security: [{ xToken: [] }],
   },
   apis: ['./routes/*.js', './models/*.js'],
-};
+});
 
-const swaggerSpec = swaggerJsdoc(swaggerOptions);
 app.use('/api/documentacion', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
-  explorer: true,
-  customCss: '.swagger-ui .topbar { display: none }',
-  customSiteTitle: "API MIGA - Documentación"
+  explorer:        true,
+  customCss:       '.swagger-ui .topbar { display: none }',
+  customSiteTitle: 'API MIGA - Documentación',
 }));
 
-// Routes
-app.use('/api/auditoria', audRoutes);
-
-// Error handler al final
-
-app.use('/api/usuarios', require('./routes/usuarios'));
-app.use('/api/personas', require('./routes/personas'));
-app.use('/api/parroquias', require('./routes/parroquias'));
-app.use('/api/rolsacramentos', require('./routes/rolsacramentos'));
-app.use('/api/tiposacramentos', require('./routes/tiposacramentos'));
-app.use('/api/sacramentos', require('./routes/sacramentos'));
-app.use('/api/matrimoniodetalles', require('./routes/matrimoniodetalles'));
-app.use('/api/personasacramentos', require('./routes/personasacramentos'));
-app.use('/api/dashboard', dashboardRoutes);
-
-
-
-app.use('/api/password', passwordRoutes);
+// ── Rutas ─────────────────────────────────────────────────────────
+app.use('/api/auditoria',               require('./routes/auditoriasRoutes'));
+app.use('/api/usuarios',                require('./routes/usuarios'));
+app.use('/api/personas',                require('./routes/personas'));
+app.use('/api/parroquias',              require('./routes/parroquias'));
+app.use('/api/rolsacramentos',          require('./routes/rolsacramentos'));
+app.use('/api/tiposacramentos',         require('./routes/tiposacramentos'));
+app.use('/api/sacramentos',             require('./routes/sacramentos'));
+app.use('/api/matrimoniodetalles',      require('./routes/matrimoniodetalles'));
+app.use('/api/personasacramentos',      require('./routes/personasacramentos'));
+app.use('/api/dashboard',               require('./routes/dashboardRoutes'));
+app.use('/api/password',                require('./routes/passwordRoutes'));
+app.use('/api/rol',                     require('./routes/rolRoute'));
+app.use('/api/permiso',                 require('./routes/permisoRoute'));
+app.use('/api/modulo',                  require('./routes/moduloRoute'));
+app.use('/api/configuracion-seguridad', require('./routes/configuracionSeguridadRoute'));
+app.use('/api/ocr', require('./routes/sacramentoOcr'));
+app.use('/api/test', require('./routes/test.routes'));
+app.use('/api/dominio-permitido',       require('./routes/dominioPermitidoRoute'));
+app.use('/api/usuario-parroquia',       require('./routes/usuarioParroquia'));
+app.use('/api/riesgos', require('./routes/riesgos'));
 
 app.get('/api/proxy-pdf', async (req, res) => {
+  const { url, name = 'documento.pdf' } = req.query;
+
+  if (!url) return res.status(400).json({ error: 'Falta la URL del PDF' });
+
+  try { new URL(url); }
+  catch { return res.status(400).json({ error: 'URL inválida' }); }
+
   try {
-    const url = req.query.url;
-    const name = req.query.name || 'documento.pdf';
-
-    if (!url) return res.status(400).json({ error: 'Falta la URL del PDF' });
-
-    // Validar que la URL sea válida
-    try {
-      new URL(url);
-    } catch (error) {
-      return res.status(400).json({ error: 'URL inválida' });
-    }
-
-    console.log('Intentando obtener PDF desde:', url);
-    
     const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'MIGA-API-Proxy/1.0'
-      },
-      timeout: 10000 // 10 segundos timeout
+      headers: { 'User-Agent': 'MIGA-API-Proxy/1.0' },
+      timeout: 10_000,
     });
 
     if (!response.ok) {
-      console.error(`Error al obtener PDF: ${response.status} ${response.statusText}`);
-      return res.status(response.status).json({ 
-        error: `No se pudo obtener el PDF externo: ${response.status} ${response.statusText}` 
+      return res.status(response.status).json({
+        error: `No se pudo obtener el PDF externo: ${response.status} ${response.statusText}`,
       });
     }
 
-    // Verificar que el contenido sea un PDF
-    const contentType = response.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/pdf')) {
-      console.warn('El contenido no parece ser un PDF:', contentType);
-    }
-
-    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Type',        'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-
+    res.setHeader('Cache-Control',       'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma',              'no-cache');
+    res.setHeader('Expires',             '0');
     response.body.pipe(res);
+
   } catch (error) {
     console.error('Error proxy PDF:', error);
-    res.status(500).json({ 
-      error: 'Error interno del servidor al obtener el PDF',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    res.status(500).json({
+      error:   'Error interno al obtener el PDF',
+      details: !IS_PROD ? error.message : undefined,
     });
   }
 });
 
-// Error handler al final (después de TODAS las rutas)
+// ── Error handler (siempre al final) ─────────────────────────────
 app.use(errorHandler());
 
 module.exports = app;
