@@ -45,11 +45,6 @@ pipeline {
                 }
             }
         }
-        stage ('Wola'){
-            steps {
-                echo '¡Wola! El backend se ha desplegado correctamente.'
-            }
-        }
     }
     post {
         success { echo 'Backend desplegado exitosamente!' }
