@@ -1,6 +1,7 @@
 const { Op } = require('sequelize');
 const Permiso = require('../models/Permisos');
 const RolPermiso = require('../models/RolPermiso');
+const Modulo = require('../models/Modulo');
 
 // Obtener permisos 
 const getPermisos = async (req, res) => {
@@ -35,14 +36,28 @@ const getPermisoById = async (req, res) => {
     }
 };
 
+const _normalizarNombre = (raw) =>
+    raw?.trim().toUpperCase().replace(/\s+/g, '_') || '';
+
 const crearPermiso = async (req, res) => {
-    const { nombre, descripcion } = req.body;
+    const nombre = _normalizarNombre(req.body.nombre);
+    const { descripcion, id_modulo } = req.body;
     try {
+        if (!nombre)
+            return res.status(400).json({ ok: false, msg: 'El nombre del permiso es obligatorio' });
+
+        if (!id_modulo)
+            return res.status(400).json({ ok: false, msg: 'El módulo es obligatorio' });
+
+        const modulo = await Modulo.findOne({ where: { id_modulo, activo: true } });
+        if (!modulo)
+            return res.status(400).json({ ok: false, msg: 'El módulo seleccionado no existe o está inactivo' });
+
         const existe = await Permiso.findOne({ where: { nombre, activo: true } });
-        if (existe) {
+        if (existe)
             return res.status(400).json({ ok: false, msg: `Ya existe un permiso con el nombre "${nombre}"` });
-        }
-        const permiso = await Permiso.create({ nombre, descripcion });
+
+        const permiso = await Permiso.create({ nombre, descripcion, id_modulo });
         res.status(201).json({ ok: true, permiso });
 
     } catch (error) {
@@ -53,14 +68,18 @@ const crearPermiso = async (req, res) => {
 
 const actualizarPermiso = async (req, res) => {
     const { id } = req.params;
-    const { nombre, descripcion } = req.body;
+    const nombre = req.body.nombre !== undefined ? _normalizarNombre(req.body.nombre) : undefined;
+    const { descripcion, id_modulo } = req.body;
     try {
         const permiso = await Permiso.findOne({ where: { id_permiso: id, activo: true } });
         if (!permiso) {
             return res.status(404).json({ ok: false, msg: 'Permiso no encontrado' });
         }
 
-        if (nombre && nombre !== permiso.nombre) {
+        if (nombre !== undefined && nombre !== permiso.nombre) {
+            if (!nombre)
+                return res.status(400).json({ ok: false, msg: 'El nombre del permiso no puede estar vacío' });
+
             const nombreExiste = await Permiso.findOne({
                 where: { nombre, activo: true, id_permiso: { [Op.ne]: id } }
             });
@@ -69,9 +88,18 @@ const actualizarPermiso = async (req, res) => {
             }
         }
 
+        if (id_modulo !== undefined) {
+            if (!id_modulo)
+                return res.status(400).json({ ok: false, msg: 'El módulo no puede estar vacío' });
+            const modulo = await Modulo.findOne({ where: { id_modulo, activo: true } });
+            if (!modulo)
+                return res.status(400).json({ ok: false, msg: 'El módulo seleccionado no existe o está inactivo' });
+        }
+
         const updates = {};
         if (nombre !== undefined) updates.nombre = nombre;
         if (descripcion !== undefined) updates.descripcion = descripcion;
+        if (id_modulo !== undefined) updates.id_modulo = id_modulo;
         res.locals._instancia = permiso;
         await permiso.update(updates);
         res.json({ ok: true, permiso });

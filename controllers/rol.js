@@ -85,22 +85,30 @@ const verificarPermisosRepetidos = async (permisosIds, excludeRolId = null) => {
     return rolDuplicado || null;
 };
 
+const _normalizarNombre = (raw) =>
+    raw?.trim().toUpperCase().replace(/\s+/g, '_') || '';
+
 const crearRol = async (req, res) => {
-    const { nombre, descripcion, permisos = [] } = req.body;
+    const nombre = _normalizarNombre(req.body.nombre);
+    const { descripcion, permisos = [] } = req.body;
     try {
+        if (!nombre)
+            return res.status(400).json({ ok: false, msg: 'El nombre del rol es obligatorio' });
+
+        if (!permisos || permisos.length === 0)
+            return res.status(400).json({ ok: false, msg: 'El rol debe tener al menos un permiso' });
+
         const nombreExiste = await Rol.findOne({ where: { nombre, activo: true } });
         if (nombreExiste) {
             return res.status(400).json({ ok: false, msg: `Ya existe un rol con el nombre "${nombre}"` });
         }
 
-        if (permisos.length > 0) {
-            const rolDuplicado = await verificarPermisosRepetidos(permisos);
-            if (rolDuplicado) {
-                return res.status(400).json({
-                    ok: false,
-                    msg: `Ya existe el rol "${rolDuplicado.nombre}" con exactamente los mismos permisos`
-                });
-            }
+        const rolDuplicado = await verificarPermisosRepetidos(permisos);
+        if (rolDuplicado) {
+            return res.status(400).json({
+                ok: false,
+                msg: `Ya existe el rol "${rolDuplicado.nombre}" con exactamente los mismos permisos`
+            });
         }
 
         const rol = await Rol.create({ nombre, descripcion });
@@ -133,7 +141,8 @@ const crearRol = async (req, res) => {
 //Actualizar rol
 const actualizarRol = async (req, res) => {
   const { id } = req.params;
-  const { nombre, descripcion, permisos, activo } = req.body;
+  const nombre = req.body.nombre !== undefined ? _normalizarNombre(req.body.nombre) : undefined;
+  const { descripcion, permisos, activo } = req.body;
 
   try {
     const rol = await Rol.findOne({ where: { id_rol: id } });
@@ -175,9 +184,11 @@ const actualizarRol = async (req, res) => {
       }
     }
 
-    if (permisos && permisos.length > 0) {
-      const rolDuplicado = await verificarPermisosRepetidos(permisos, id);
+    if (permisos !== undefined) {
+      if (permisos.length === 0)
+        return res.status(400).json({ ok: false, msg: 'El rol debe tener al menos un permiso' });
 
+      const rolDuplicado = await verificarPermisosRepetidos(permisos, id);
       if (rolDuplicado) {
         return res.status(400).json({
           ok: false,
