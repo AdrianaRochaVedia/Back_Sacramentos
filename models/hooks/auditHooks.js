@@ -13,6 +13,11 @@ const MODELOS_AUDITADOS = [
   'RolSacramento',
   'Permisos',
   'MatrizRiesgo',
+  'ActivoInformacion',
+  'VulnerabilidadAmenaza',
+  'Riesgo',
+  'RiesgoVulnerabilidad',
+  'Control',
 ];
 
 function registrarHooks(modelo) {
