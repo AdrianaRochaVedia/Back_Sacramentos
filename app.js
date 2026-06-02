@@ -29,7 +29,7 @@ app.disable('x-powered-by');
 const ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'https://fronttaller0.vercel.app',
-  'http://sacra360.s3-website-us-east-1.amazonaws.com','https://reportes-t86w.onrender.com/graphql',
+  'http://sacra360.s3-website-us-east-1.amazonaws.com','https://reportes-t86w.onrender.com/graphql','http://18.191.216.95:3000',
 ];
 
 app.use(cors({
@@ -51,7 +51,7 @@ app.use(helmet({
       fontSrc:      ["'self'", 'https://fonts.gstatic.com'],
       scriptSrc:    ["'self'", "'unsafe-inline'"],
       imgSrc:       ["'self'", 'data:', 'https:'],
-      connectSrc:   ["'self'", ...ALLOWED_ORIGINS, 'https://back-sacramentos.onrender.com','https://reportes-t86w.onrender.com/graphql','https://*', 'http://*'],
+      connectSrc:   ["'self'", ...ALLOWED_ORIGINS, 'https://back-sacramentos.onrender.com','https://reportes-t86w.onrender.com/graphql','http://18.191.216.95:3000','https://*', 'http://*'],
       objectSrc:    ["'none'"],
       baseUri:      ["'self'"],
       formAction:   ["'self'"],
@@ -137,9 +137,7 @@ app.use('/api/ocr', require('./routes/sacramentoOcr'));
 app.use('/api/test', require('./routes/test.routes'));
 app.use('/api/dominio-permitido',       require('./routes/dominioPermitidoRoute'));
 app.use('/api/usuario-parroquia',       require('./routes/usuarioParroquia'));
-app.use('/api/riesgos',          require('./routes/riesgos'));
-app.use('/api/activos',          require('./routes/activosInformacion'));
-app.use('/api/vulnerabilidades', require('./routes/vulnerabilidades'));
+app.use('/api/riesgos', require('./routes/riesgos'));
 
 app.get('/api/proxy-pdf', async (req, res) => {
   const { url, name = 'documento.pdf' } = req.query;
@@ -176,7 +174,12 @@ app.get('/api/proxy-pdf', async (req, res) => {
     });
   }
 });
-
+app.get('/', (req, res) => {
+  res.json({
+    ok: true,
+    message: 'API Sacra360 funcionando en EC2'
+  });
+});
 // ── Error handler (siempre al final) ─────────────────────────────
 app.use(errorHandler());
 
