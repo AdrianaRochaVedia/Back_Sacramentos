@@ -7,9 +7,9 @@ const Control = sequelize.define('Control', {
   descripcion:          { type: DataTypes.TEXT, allowNull: false },
   tipo_control:         { type: DataTypes.STRING(20) },     // preventivo, detective, correctivo
   nivel_efectividad:    {
-    type:     DataTypes.STRING(10),
+    type:     DataTypes.STRING(20),
     allowNull: false,
-    validate: { isIn: [['Bajo', 'Medio', 'Alto']] },
+    validate: { isIn: [['Manual', 'Automático', 'Semi automático']] },
   },
   frecuencia_control:   { type: DataTypes.STRING(20) },
   probabilidad_residual: { type: DataTypes.SMALLINT, allowNull: false },

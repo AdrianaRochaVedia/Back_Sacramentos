@@ -52,8 +52,8 @@ const createControl = async (req, res) => {
       return res.status(400).json({ ok: false, msg: 'La descripción del control es obligatoria' });
     if (!nivel_efectividad)
       return res.status(400).json({ ok: false, msg: 'El nivel de efectividad es obligatorio' });
-    if (!['Bajo', 'Medio', 'Alto'].includes(nivel_efectividad))
-      return res.status(400).json({ ok: false, msg: 'El nivel de efectividad debe ser Bajo, Medio o Alto' });
+    if (!['Manual', 'Automático', 'Semi automático'].includes(nivel_efectividad))
+      return res.status(400).json({ ok: false, msg: 'El nivel de efectividad debe ser Manual, Automático o Semi automático' });
     if (probabilidad_residual === undefined || probabilidad_residual === null)
       return res.status(400).json({ ok: false, msg: 'La probabilidad residual es obligatoria' });
     if (impacto_residual === undefined || impacto_residual === null)
@@ -121,8 +121,8 @@ const updateControl = async (req, res) => {
     // Validaciones solo si el campo viene en el body
     if (descripcion !== undefined && !String(descripcion).trim())
       return res.status(400).json({ ok: false, msg: 'La descripción no puede estar vacía' });
-    if (nivel_efectividad !== undefined && !['Bajo', 'Medio', 'Alto'].includes(nivel_efectividad))
-      return res.status(400).json({ ok: false, msg: 'El nivel de efectividad debe ser Bajo, Medio o Alto' });
+    if (nivel_efectividad !== undefined && !['Manual', 'Automático', 'Semi automático'].includes(nivel_efectividad))
+      return res.status(400).json({ ok: false, msg: 'El nivel de efectividad debe ser Manual, Automático o Semi automático' });
 
     const errProb = _validarRango(probabilidad_residual, 'La probabilidad residual');
     if (errProb) return res.status(400).json({ ok: false, msg: errProb });
