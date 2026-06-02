@@ -48,8 +48,8 @@ const _siguienteNumero = async (t) => {
 
 const _validarRango = (valor, nombre) => {
   const n = Number(valor);
-  if (!Number.isInteger(n) || n < 1 || n > 4)
-    return `${nombre} debe ser un número entero entre 1 y 4`;
+  if (!Number.isInteger(n) || n < 1 || n > 5)
+    return `${nombre} debe ser un número entero entre 1 y 5`;
   return null;
 };
 

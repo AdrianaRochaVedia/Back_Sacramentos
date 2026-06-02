@@ -6,9 +6,16 @@ const VulnerabilidadAmenaza = sequelize.define('VulnerabilidadAmenaza', {
   nombre:            { type: DataTypes.STRING(200), allowNull: false },
   descripcion:       { type: DataTypes.TEXT },
   tipo:              {
-    type:         DataTypes.STRING(20),
+    type:         DataTypes.STRING(50),
     allowNull:    false,
-    validate:     { isIn: [['vulnerabilidad', 'amenaza']] },
+    validate:     { isIn: [[
+      'amenaza_natural',
+      'amenaza_humana',
+      'vulnerabilidad_personas',
+      'vulnerabilidad_proceso',
+      'vulnerabilidad_tecnologia',
+      'vulnerabilidad_infraestructura',
+    ]] },
   },
   activo:            { type: DataTypes.BOOLEAN, defaultValue: true },
   usuario_id:        { type: DataTypes.INTEGER },
