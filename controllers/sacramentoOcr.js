@@ -11,6 +11,7 @@ const Persona = require('../models/Persona');
 const TipoSacramento = require('../models/TipoSacramento');
 const Parroquia = require('../models/Parroquia');
 const MatrimonioDetalle = require('../models/MatrimonioDetalle');
+const { indexarSacramento } = require('../services/opensearch.service'); // <-- AGREGADO
 
 // Funcion para subir imagen, hacer el OCR y guardar en histórico como 'pendiente'
 const procesarOCR = async (req, res = response) => {
@@ -583,6 +584,34 @@ const confirmarOCR = async (req, res = response) => {
     }, { transaction: t });
 
     await t.commit();
+
+    // ==========================================
+    // INICIO: INTEGRACIÓN CON OPENSEARCH
+    // ==========================================
+    // Juntamos la info extraída del OCR en un solo texto para que sea "buscable"
+    const textoOCR = historico.datos_extraidos ? JSON.stringify(historico.datos_extraidos) : '';
+
+    // Si es matrimonio, juntamos los nombres. Si no, usamos null (ya que en OCR no traemos todo el objeto persona aquí).
+    let nombresInvolucrados = '';
+    if (tipoSacramento === 2 && req.body.novio_1 && req.body.novio_2) {
+      nombresInvolucrados = `${req.body.novio_1.nombre_completo} ${req.body.novio_2.nombre_completo}`;
+    } else if (req.body.nueva_persona) {
+      nombresInvolucrados = req.body.nueva_persona.nombre_completo || req.body.nueva_persona.nombre || '';
+    }
+
+    await indexarSacramento({
+      id_sacramento:         nuevoSacramento.id_sacramento,
+      foja,
+      numero,
+      fecha_sacramento,
+      tipo_sacramento_id:    tipoSacramento,
+      parroquia_id:          historico.institucion_parroquia_id,
+      texto_ocr:             textoOCR,
+      personas_involucradas: nombresInvolucrados
+    });
+    // ==========================================
+    // FIN: INTEGRACIÓN CON OPENSEARCH
+    // ==========================================
 
     return res.status(201).json({
       ok: true,
