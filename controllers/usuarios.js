@@ -26,7 +26,7 @@ const {
   twoFactorEmail,
   cuentaDesbloqueadaEmail
 } = require('../helpers/emailTemplates');
-const { validarFormatoCorreo } = require('../helpers/validarFormatoCorreo');
+
 const { sincronizarUsuarioParroquias } = require('../helpers/SincronizacionParroquias');
 
 const ROLES_CON_PARROQUIA = ['PARROCO', 'SECRETARIO_PARROQUIAL'];
@@ -274,56 +274,12 @@ const crearUsuario = async (req, res) => {
         ? { [Op.iLike]: apellido_materno.trim() }
         : null
     };
-    const nombreDuplicado = await Usuario.findOne({ where: whereNombre });
+    const nombreDuplicado = await Usuario.findOne({ where: { ...whereNombre, activo: true } });
     if (nombreDuplicado) {
       return res.status(400).json({
         ok: false,
         msg: 'Ya existe un usuario con el mismo nombre completo'
       });
-    }
-
-    // ── Validación de formato nombre.apellido@dominio ─────────────
-    const formatoValido = validarFormatoCorreo({ email, nombre, apellido_paterno, apellido_materno });
-    if (!formatoValido.ok) {
-      return res.status(400).json({ ok: false, msg: formatoValido.msg });
-    }
-
-    // ── Si usa formato con inicial, verificar que realmente existe
-    // otra persona con el mismo nombre y apellido paterno ──────────
-    const [localPart] = email.split('@');
-    const nombreNorm   = localPart.split('.')[0];
-    const apellidoNorm = localPart.split('.')[1];
-    const tieneInicial = localPart.split('.').length === 3;
-
-    if (!tieneInicial) {
-      // Usa formato base → no debe existir ya alguien con mismo primer nombre+apellido paterno
-      const { Op } = require('sequelize');
-      const primerNombre = nombre.trim().split(/\s+/)[0];
-      const colision = await Usuario.findOne({
-        where: {
-          [Op.or]: [
-            { nombre: { [Op.iLike]: primerNombre } },
-            { nombre: { [Op.iLike]: `${primerNombre} %` } }
-          ],
-          apellido_paterno: { [Op.iLike]: apellido_paterno.trim() },
-        }
-      });
-
-      if (colision) {
-        // Ya existe alguien con ese nombre, debe usar el formato con inicial
-        const inicial = apellido_materno
-          ? apellido_materno.trim().charAt(0).toLowerCase()
-          : null;
-
-        const sugerencia = inicial
-          ? `${nombreNorm}.${apellidoNorm}.${inicial}@${email.split('@')[1]}`
-          : null;
-
-        return res.status(400).json({
-          ok: false,
-          msg: `Ya existe un usuario con ese nombre y apellido. ${sugerencia ? `Usa el correo: ${sugerencia}` : 'Agrega la inicial del apellido materno.'}`,
-        });
-      }
     }
 
     // ── Validar correo con ZeroBounce antes de crear el usuario ──
