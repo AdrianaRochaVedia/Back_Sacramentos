@@ -86,7 +86,7 @@ describe('Módulo de Sacramentos — Pruebas unitarias (Tania)', () => {
   // getSacramentoCompleto
   // ══════════════════════════════════════════════════════════════════════════
 
-  test('PRUEBA 33 — getSacramentoCompleto devuelve 200 con el sacramento y sus relaciones', async () => {
+  test('PRUEBA 1 — getSacramentoCompleto devuelve 200 con el sacramento y sus relaciones', async () => {
 
     // 1) PREPARACIÓN
     const sacramentoMock = {

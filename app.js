@@ -29,7 +29,7 @@ app.disable('x-powered-by');
 const ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'https://fronttaller0.vercel.app',
-  'http://sacra360.s3-website-us-east-1.amazonaws.com','https://reportes-t86w.onrender.com/graphql',
+  'http://sacra360.s3-website-us-east-1.amazonaws.com','https://reportes-t86w.onrender.com/graphql','http://34.228.140.187:3000',
 ];
 
 app.use(cors({
@@ -51,7 +51,7 @@ app.use(helmet({
       fontSrc:      ["'self'", 'https://fonts.gstatic.com'],
       scriptSrc:    ["'self'", "'unsafe-inline'"],
       imgSrc:       ["'self'", 'data:', 'https:'],
-      connectSrc:   ["'self'", ...ALLOWED_ORIGINS, 'https://back-sacramentos.onrender.com','https://reportes-t86w.onrender.com/graphql','https://*', 'http://*'],
+      connectSrc:   ["'self'", ...ALLOWED_ORIGINS, 'https://back-sacramentos.onrender.com','https://reportes-t86w.onrender.com/graphql','http://34.228.140.187:3000','https://*', 'http://*'],
       objectSrc:    ["'none'"],
       baseUri:      ["'self'"],
       formAction:   ["'self'"],
@@ -174,7 +174,12 @@ app.get('/api/proxy-pdf', async (req, res) => {
     });
   }
 });
-
+app.get('/', (req, res) => {
+  res.json({
+    ok: true,
+    message: 'API Sacra360 funcionando en EC2'
+  });
+});
 // ── Error handler (siempre al final) ─────────────────────────────
 app.use(errorHandler());
 

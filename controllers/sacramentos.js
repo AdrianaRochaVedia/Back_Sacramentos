@@ -13,6 +13,12 @@ const {
   crearSacramentoCompletoService,
   actualizarSacramentoCompletoService,
 } = require('../services/sacramento.service');
+const {
+  indexarSacramento,
+  buscarPorTextoLibre,
+  buscarPorPersonaYTipo,
+  opensearchConfigurado
+} = require('../services/opensearch.service'); // <-- AGREGADO
 
 // Obtener todos los sacramentos activos
 const getSacramentos = async (req, res = response) => {
@@ -34,10 +40,6 @@ const getSacramentos = async (req, res = response) => {
             tipo_sacramento_id_tipo
         } = req.query;
   
-        const camposBusqueda = [
-            'foja'  
-        ];
-        
         const filtros = {
             fecha_sacramento,           
             fecha_registro,
@@ -50,7 +52,47 @@ const getSacramentos = async (req, res = response) => {
             activo: activo !== undefined ? activo : true
         };
         
-        const whereConditions = combinarCondiciones(search, camposBusqueda, filtros);
+        // Usamos tu middleware existente para las condiciones base de SQL
+        const camposBusqueda = ['foja'];
+        let whereConditions = combinarCondiciones(undefined, camposBusqueda, filtros); // Pasamos undefined al search para que SQL no haga el Op.like lento
+
+        // ==========================================
+        // INTEGRACIÓN OPENSEARCH PARA BÚSQUEDA LIBRE
+        // ==========================================
+        if (search && search.trim() !== '') {
+            const { fuente, ids } = await buscarPorTextoLibre(search.trim());
+
+            if (fuente === 'opensearch') {
+                // Si OpenSearch no encuentra nada con ese texto, devolvemos vacío inmediatamente
+                if (ids.length === 0) {
+                    return res.json({
+                        ok: true,
+                        sacramentos: [],
+                        totalItems: 0,
+                        totalPages: 0,
+                        currentPage: page,
+                        filtros_aplicados: { search, ...filtros },
+                        motor_busqueda: 'opensearch'
+                    });
+                }
+
+                // Extraemos los IDs que OpenSearch encontró y forzamos a Sequelize a buscar SOLO esos
+                whereConditions.id_sacramento = { [Op.in]: ids };
+
+            } else {
+                // OpenSearch no disponible o con error: buscamos directamente en Postgres
+                console.log('[Busqueda] Usando PostgreSQL para búsqueda de texto libre.');
+                const likeSearch = { [Op.iLike]: `%${search.trim()}%` };
+                whereConditions = {
+                    ...whereConditions,
+                    [Op.or]: [
+                        { foja: likeSearch },
+                        { numero: likeSearch }
+                    ]
+                };
+            }
+        }
+        // ==========================================
 
         const { count, rows } = await Sacramento.findAndCountAll({
             where: whereConditions,
@@ -73,7 +115,7 @@ const getSacramentos = async (req, res = response) => {
             ],
             offset,
             limit,
-            order: [['fecha_sacramento', 'DESC'], ['numero', 'DESC'], ['fecha_registro', 'DESC'], ['fecha_actualizacion', 'DESC']]
+            order: [['fecha_sacramento', 'DESC'], ['numero', 'DESC'], ['fecha_registro', 'DESC']]
         });
 
         res.json({
@@ -82,17 +124,8 @@ const getSacramentos = async (req, res = response) => {
             totalItems: count,
             totalPages: Math.ceil(count / limit),
             currentPage: page,
-            filtros_aplicados: {
-                search,
-                fecha_registro,
-                fecha_actualizacion,
-                foja,
-                numero,
-                usuario_id_usuario,
-                institucion_parroquia_id_parroquia,
-                tipo_sacramento_id_tipo,
-                activo
-            }
+            filtros_aplicados: { search, ...filtros },
+            motor_busqueda: search ? (opensearchConfigurado() ? 'opensearch' : 'postgresql') : 'postgresql'
         });
 
     } catch (error) {
@@ -134,7 +167,14 @@ const getAllSacramentos = async (req, res) => {
 
 
 const crearSacramento = async (req, res) => {
-  const { fecha_sacramento, foja, numero, usuario_id_usuario, institucion_parroquia_id_parroquia, tipo_sacramento_id_tipo } = req.body;
+  const { 
+    fecha_sacramento, 
+    foja, 
+    numero, 
+    usuario_id_usuario, 
+    institucion_parroquia_id_parroquia, 
+    tipo_sacramento_id_tipo 
+  } = req.body;
 
   try {
     const sacramento = await Sacramento.create({
@@ -145,6 +185,22 @@ const crearSacramento = async (req, res) => {
       institucion_parroquia_id_parroquia,
       tipo_sacramento_id_tipo
     });
+
+    // =================================================================
+    // ENLACE CON AWS OPENSEARCH - CREACIÓN SIMPLE
+    // =================================================================
+    await indexarSacramento({
+      id_sacramento:      sacramento.id_sacramento,
+      foja,
+      numero,
+      fecha_sacramento,
+      tipo_sacramento_id: tipo_sacramento_id_tipo,
+      parroquia_id:       institucion_parroquia_id_parroquia,
+      texto_ocr:          '', // Inicialmente vacío en creación simple
+      personas_involucradas: '' // Al ser un registro simple no cuenta con el array de relaciones estructuradas
+    });
+    // =================================================================
+
     res.status(201).json({
       ok: true,
       sacramento
@@ -260,7 +316,7 @@ const eliminarSacramento = async (req, res = response) => {
     }
 };
 
-// endpoint para crear sacramento y todas sus relaciones
+
 const crearSacramentoCompleto = async (req, res) => {
   const t = await Sacramento.sequelize.transaction();
 
@@ -275,6 +331,7 @@ const crearSacramentoCompleto = async (req, res) => {
       });
     }
 
+    // Llama a tu servicio pasándole los datos limpios
     const sacramento = await crearSacramentoCompletoService({
       data: req.body,
       usuario_id_usuario,
@@ -283,6 +340,28 @@ const crearSacramentoCompleto = async (req, res) => {
 
     await t.commit();
 
+    // =================================================================
+    // ENLACE CON AWS OPENSEARCH - CREACIÓN MANUAL
+    // =================================================================
+    const { foja, numero, fecha_sacramento, tipo_sacramento_id_tipo, parroquiaId, relaciones } = req.body;
+
+    // Unimos los nombres del array de relaciones para que el buscador global los localice directamente
+    const nombresInvolucrados = relaciones && Array.isArray(relaciones)
+      ? relaciones.map(r => r.nombre_completo || r.nombre || '').join(' ')
+      : '';
+
+    await indexarSacramento({
+      id_sacramento:         sacramento.id_sacramento,
+      foja,
+      numero,
+      fecha_sacramento,
+      tipo_sacramento_id:    tipo_sacramento_id_tipo,
+      parroquia_id:          parroquiaId,
+      texto_ocr:             '', // Al ser creación manual limpia, se inicializa vacío
+      personas_involucradas: nombresInvolucrados.trim()
+    });
+    // =================================================================
+
     return res.status(201).json({
       ok: true,
       msg: 'Sacramento creado correctamente',
@@ -290,25 +369,16 @@ const crearSacramentoCompleto = async (req, res) => {
     });
   } catch (error) {
     await t.rollback();
-
     console.error('Error al crear sacramento completo:', error);
-
     return res.status(400).json({
-    ok: false,
-    msg: error.message || 'Error al crear sacramento',
-  });
+      ok: false,
+      msg: error.message || 'Error al crear sacramento',
+    });
   }
 };
-// para buscar sacramento por la persona que lo recibió
-// Buscar sacramentos por datos de la persona + tipo sacramento + rol principal
+
+
 const buscarSacramentosPorPersona = async (req, res) => {
-  // Roles permitidos para mostrar sacramentos donde la persona participó
-  const ROLES_VISIBLES = [
-    1, 4, 8,    // roles principales (bautizado, confirmado, principal)
-    2, 3, // matrimonio (esposo/esposa/novio/novia)
-    5,            // padrinos
-    7   // ministros / sacerdotes / celebrantes
-  ];
   try {
     const {
       nombre,
@@ -316,84 +386,132 @@ const buscarSacramentosPorPersona = async (req, res) => {
       apellido_materno,
       ci,
       carnet_identidad,
-      fecha_nacimiento,
-      lugar_nacimiento,
       tipo_sacramento_id_tipo,
-      //rol_principal, // No se requiere para la nueva lógica
       page = 1,
       limit = 10
     } = req.query;
 
-    // Validaciones necesarias
     if (!tipo_sacramento_id_tipo) {
       return res.status(400).json({ ok: false, msg: "Debe enviar tipo_sacramento_id_tipo" });
     }
 
-    // Construcción dinámica de filtros de persona
-    const filtrosPersona = {};
+    // ==========================================
+    // 1. BUSCAR EN OPENSEARCH PRIMERO
+    // ==========================================
+    // Juntamos los nombres y apellidos en una sola cadena de búsqueda difusa
+    let textoPersona = `${nombre || ''} ${apellido_paterno || ''} ${apellido_materno || ''}`.trim();
+    const documentoIdentidad = ci || carnet_identidad;
 
-    if (nombre) filtrosPersona.nombre = { [Op.like]: `%${nombre}%` };
-    if (apellido_paterno) filtrosPersona.apellido_paterno = { [Op.like]: `%${apellido_paterno}%` };
-    if (apellido_materno) filtrosPersona.apellido_materno = { [Op.like]: `%${apellido_materno}%` };
-    if (ci) filtrosPersona.carnet_identidad = { [Op.like]: `%${ci}%` };
-    if (carnet_identidad) filtrosPersona.carnet_identidad = { [Op.like]: `%${carnet_identidad}%` };
-    if (fecha_nacimiento) filtrosPersona.fecha_nacimiento = fecha_nacimiento;
-    if (lugar_nacimiento) filtrosPersona.lugar_nacimiento = { [Op.like]: `%${lugar_nacimiento}%` };
+    const { fuente, ids, total } = await buscarPorPersonaYTipo({
+      tipo_sacramento_id: tipo_sacramento_id_tipo,
+      textoPersona,
+      documentoIdentidad: documentoIdentidad || '',
+      page:  Number(page),
+      limit: Number(limit)
+    });
 
-    const offset = (page - 1) * limit;
+    // Si OpenSearch no esta disponible, hacemos la búsqueda directa en Postgres
+    if (fuente === 'no_disponible' || fuente === 'error') {
+      console.log('[Busqueda] Búsqueda por persona realizada directamente en PostgreSQL.');
 
-    // QUERY PRINCIPAL
-    const { count, rows } = await Sacramento.findAndCountAll({
+      const wherePersona = {};
+      if (nombre)           wherePersona.nombre           = { [Op.iLike]: `%${nombre}%` };
+      if (apellido_paterno) wherePersona.apellido_paterno = { [Op.iLike]: `%${apellido_paterno}%` };
+      if (apellido_materno) wherePersona.apellido_materno = { [Op.iLike]: `%${apellido_materno}%` };
+      if (documentoIdentidad) wherePersona.carnet_identidad = { [Op.iLike]: `%${documentoIdentidad}%` };
+
+      const offset = (Number(page) - 1) * Number(limit);
+
+      const rows = await Sacramento.findAll({
+        where: { tipo_sacramento_id_tipo: Number(tipo_sacramento_id_tipo), activo: true },
+        include: [
+          {
+            model: PersonaSacramento,
+            as: "personaSacramentos",
+            required: true,
+            include: [{
+              model: Persona,
+              as: "persona",
+              where: Object.keys(wherePersona).length > 0 ? wherePersona : undefined
+            }]
+          },
+          { model: TipoSacramento, as: "tipoSacramento" },
+          { model: Parroquia, as: "parroquia" },
+        ],
+        order: [['fecha_sacramento', 'DESC'], ['numero', 'DESC']],
+        limit: Number(limit),
+        offset
+      });
+
+      for (const s of rows) {
+        const relaciones = await PersonaSacramento.findAll({
+          where: { sacramento_id_sacramento: s.id_sacramento },
+          include: [
+            { model: Persona, as: "persona" },
+            { model: RolSacramento, as: "rolSacramento" }
+          ]
+        });
+        s.dataValues.todasRelaciones = relaciones;
+
+        if (s.tipoSacramento?.id_tipo === 2) {
+          const matrimonioDetalle = await MatrimonioDetalle.findOne({
+            where: { sacramento_id_sacramento: s.id_sacramento }
+          });
+          s.dataValues.matrimonioDetalle = matrimonioDetalle;
+        } else {
+          s.dataValues.matrimonioDetalle = null;
+        }
+      }
+
+      return res.json({
+        ok: true,
+        resultados: rows,
+        total: rows.length,
+        totalPages: Math.ceil(rows.length / Number(limit)),
+        currentPage: Number(page),
+        motor_busqueda: 'postgresql'
+      });
+    }
+    // ==========================================
+
+    // ==========================================
+    // 2. RECUPERAR DATOS COMPLETOS DE POSTGRES (cuando OpenSearch respondió)
+    // ==========================================
+    if (ids.length === 0) {
+      return res.json({
+        ok: true,
+        resultados: [],
+        total: 0,
+        totalPages: 0,
+        currentPage: Number(page),
+        motor_busqueda: 'opensearch'
+      });
+    }
+
+    // Obtenemos solo los IDs exactos de los sacramentos donde aparece esta persona
+    const rows = await Sacramento.findAll({
       where: {
-        activo: true,
-        tipo_sacramento_id_tipo
+        id_sacramento: ids,
+        activo: true
       },
-      subQuery: false,
       include: [
-        // Relación principal (persona principal, padrinos, ministros)
         {
           model: PersonaSacramento,
           as: "personaSacramentos",
           required: true,
-          where: {
-            rol_sacramento_id_rol_sacra: {
-              [Op.in]: ROLES_VISIBLES
-            }
-          },
-          include: [
-            {
-              model: Persona,
-              as: "persona",
-              where: filtrosPersona
-            }
-          ]
+          include: [{ model: Persona, as: "persona" }]
         },
-        // Info del tipo de sacramento
-        {
-          model: TipoSacramento,
-          as: "tipoSacramento"
-        },
-        // Info parroquia
-        {
-          model: Parroquia,
-          as: "parroquia"
-        },
+        { model: TipoSacramento, as: "tipoSacramento" },
+        { model: Parroquia, as: "parroquia" },
       ],
-      limit,
-      offset,
       order: [
         ['fecha_sacramento', 'DESC'],
         ['numero', 'DESC']
       ]
     });
 
-    // EXCLUSIÓN OBLIGATORIA:
-    // No mostrar sacramentos donde UNA DE LAS PERSONAS encontradas es también el usuario que registró el sacramento.
-    const filtrados = rows;
-
-    //  Obtener todas las relaciones completas (padrinos, ministros, etc.) y MatrimonioDetalle si aplica
-    for (const s of filtrados) {
-      // Relaciones completas
+    // Mantenemos tu lógica de mapeo de detalles y relaciones
+    for (const s of rows) {
       const relaciones = await PersonaSacramento.findAll({
         where: { sacramento_id_sacramento: s.id_sacramento },
         include: [
@@ -404,12 +522,9 @@ const buscarSacramentosPorPersona = async (req, res) => {
 
       s.dataValues.todasRelaciones = relaciones;
 
-      // Buscar detalle de matrimonio SOLO si es matrimonio
       if (s.tipoSacramento?.id_tipo === 2) {
         const matrimonioDetalle = await MatrimonioDetalle.findOne({
-          where: {
-            sacramento_id_sacramento: s.id_sacramento
-          }
+          where: { sacramento_id_sacramento: s.id_sacramento }
         });
         s.dataValues.matrimonioDetalle = matrimonioDetalle;
       } else {
@@ -419,10 +534,11 @@ const buscarSacramentosPorPersona = async (req, res) => {
 
     return res.json({
       ok: true,
-      resultados: filtrados,
-      total: filtrados.length,
-      totalPages: Math.ceil(filtrados.length / limit),
-      currentPage: page
+      resultados: rows,
+      total,
+      totalPages: Math.ceil(total / Number(limit)),
+      currentPage: Number(page),
+      motor_busqueda: 'opensearch'
     });
 
   } catch (error) {
@@ -701,6 +817,32 @@ const actualizarSacramentoCompleto = async (req, res) => {
 
     await t.commit();
 
+    // =================================================================
+    // ENLACE CON AWS OPENSEARCH - ACTUALIZACIÓN / EDICIÓN
+    // =================================================================
+    const { foja, numero, fecha_sacramento, tipo_sacramento_id_tipo, parroquiaId, relaciones } = req.body;
+
+    // Parseamos relaciones en caso de que vengan serializadas como string
+    const relacionesArray = typeof relaciones === 'string' ? JSON.parse(relaciones) : relaciones;
+
+    const nombresInvolucrados = relacionesArray && Array.isArray(relacionesArray)
+      ? relacionesArray.map(r => r.nombre_completo || r.nombre || '').join(' ')
+      : '';
+
+    // La operación index con un ID existente actúa automáticamente como un "Update" total
+    await indexarSacramento({
+      id_sacramento:         Number(id_sacramento),
+      foja,
+      numero,
+      fecha_sacramento,
+      tipo_sacramento_id:    tipo_sacramento_id_tipo,
+      parroquia_id:          parroquiaId,
+      // Nota: Mantenemos el texto_ocr original si existía haciendo una actualización parcial, 
+      // o mapeando los campos necesarios para no perder el histórico del documento analizado.
+      personas_involucradas: nombresInvolucrados.trim()
+    });
+    // =================================================================
+
     return res.json({
       ok: true,
       msg: 'Sacramento actualizado correctamente',
@@ -708,9 +850,7 @@ const actualizarSacramentoCompleto = async (req, res) => {
     });
   } catch (error) {
     await t.rollback();
-
     console.error('Error al actualizar sacramento completo:', error);
-
     return res.status(500).json({
       ok: false,
       msg: error.message || 'Error al actualizar el sacramento',

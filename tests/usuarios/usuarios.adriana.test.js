@@ -10,12 +10,27 @@ const ID_USUARIO_INEXISTENTE  = 999999;
 let ID_USUARIO_A_ELIMINAR;
 let ID_USUARIO_A_DESBLOQUEAR;
 
+jest.mock('../../helpers/emailValidator', () => ({
+  validarEmailZeroBounce: jest.fn().mockResolvedValue({ status: 'valid' }),
+  emailEsEnviable:        jest.fn().mockReturnValue(true),
+}));
+
+jest.mock('../../helpers/validarFormatoCorreo', () => ({
+  validarFormatoCorreo: jest.fn().mockReturnValue({ ok: true }),
+}));
+
+jest.mock('../../helpers/mailer', () => ({
+  sendMail: jest.fn().mockResolvedValue(true),
+}));
+
+
 beforeAll(async () => {
   await sequelize.authenticate();
 
   await Usuario.destroy({ where: { email: `isabel.rocha.v@${DOMINIO_PERMITIDO}` } });
   await Usuario.destroy({ where: { email: `jesus.rocha@${DOMINIO_PERMITIDO}` } });
   await Usuario.destroy({ where: { email: `irene.rocha@${DOMINIO_PERMITIDO}` } });
+  await Usuario.destroy({ where: { email: `carlos.mendez@${DOMINIO_PERMITIDO}` } });
   await Usuario.destroy({
     where: { nombre: 'Isabel Antonella', apellido_paterno: 'Rocha', apellido_materno: 'Vedia' }
   });
@@ -24,7 +39,7 @@ beforeAll(async () => {
   const usuarioEliminar = await Usuario.create({
     nombre: 'Jesus', apellido_paterno: 'Rocha', apellido_materno: 'Vedia',
     email: `jesus.rocha@${DOMINIO_PERMITIDO}`,
-    password: 'Admin123456#', 
+    password: 'Admin123456#',
     fecha_nacimiento: '1990-01-01',
     activo: true
   });
@@ -47,8 +62,7 @@ afterAll(async () => {
   await Usuario.destroy({ where: { email: `jesus.rocha@${DOMINIO_PERMITIDO}` } });
   await Usuario.destroy({ where: { email: `irene.rocha@${DOMINIO_PERMITIDO}` } });
   await sequelize.close();
-}, 30000); 
-
+}, 30000);
 
 
 // PRUEBA 1 — Crear usuario con datos válidos
@@ -60,7 +74,7 @@ describe('Crear usuario con datos válidos', () => {
       apellido_paterno: 'Rocha',
       apellido_materno: 'Vedia',
       email:            `isabel.rocha.v@${DOMINIO_PERMITIDO}`,
-      password:         'Clave1234!',
+      password:         'ClaveSegura1234!',   
       fecha_nacimiento: '1995-06-20',
       id_rol:           2
     };
@@ -81,7 +95,7 @@ describe('Crear usuario con datos válidos', () => {
 });
 
 
-// PRUEBA — Crear usuario con email duplicado
+// PRUEBA 2 — Crear usuario con email duplicado
 describe('Crear usuario con email duplicado', () => {
   test('Debe retornar 400 indicando que el email ya está registrado', async () => {
     // 1. Preparación de la prueba
@@ -90,7 +104,7 @@ describe('Crear usuario con email duplicado', () => {
       apellido_paterno: 'Rocha',
       apellido_materno: 'Vedia',
       email:            `isabel.rocha.v@${DOMINIO_PERMITIDO}`,
-      password:         'Clave1234!',
+      password:         'ClaveSegura1234!',  
       fecha_nacimiento: '1995-06-20',
       id_rol:           2
     };
@@ -117,8 +131,8 @@ describe('Crear usuario con nombre completo duplicado', () => {
       nombre:           'Isabel Antonella',
       apellido_paterno: 'Rocha',
       apellido_materno: 'Vedia',
-      email:            `irocha@${DOMINIO_PERMITIDO}`, 
-      password:         'Clave1234!',
+      email:            `irocha@${DOMINIO_PERMITIDO}`,
+      password:         'ClaveSegura1234!',   
       fecha_nacimiento: '1995-06-20',
       id_rol:           2
     };
@@ -145,7 +159,7 @@ describe('Crear usuario con fecha de nacimiento futura', () => {
       apellido_paterno: 'Mendez',
       apellido_materno: 'Vega',
       email:            `carlos.mendez@${DOMINIO_PERMITIDO}`,
-      password:         'Clave1234!',
+      password:         'ClaveSegura1234!',   
       fecha_nacimiento: '2099-01-01',
       id_rol:           1
     };
@@ -193,31 +207,31 @@ describe('Obtener usuario por ID existente', () => {
   test('Debe retornar 200 y los datos del usuario', async () => {
     // 1. Preparación de la prueba
     const idBuscado = ID_USUARIO_EXISTENTE;
- 
+
     // 2. Lógica de la Prueba
     const response = await request(app)
       .get(`/api/usuarios/${idBuscado}`)
       .set('x-token', TOKEN_VALIDO);
- 
+
     // 3. Verificación (Assert)
     expect(response.status).toBe(200);
     expect(response.body.ok).toBe(true);
     expect(response.body.usuario).toHaveProperty('id_usuario', idBuscado);
   });
 });
- 
- 
+
+
 // PRUEBA 7 — Obtener usuario por ID inexistente
 describe('Obtener usuario por ID inexistente', () => {
   test('Debe retornar 404 indicando que el usuario no fue encontrado', async () => {
     // 1. Preparación de la prueba
     const idInexistente = ID_USUARIO_INEXISTENTE;
- 
+
     // 2. Lógica de la Prueba
     const response = await request(app)
       .get(`/api/usuarios/${idInexistente}`)
       .set('x-token', TOKEN_VALIDO);
- 
+
     // 3. Verificación (Assert)
     expect(response.status).toBe(404);
     expect(response.body.ok).toBe(false);
@@ -231,39 +245,39 @@ describe('Eliminar usuario existente', () => {
   test('Debe retornar 200 confirmando que el usuario fue eliminado', async () => {
     // 1. Preparación de la prueba
     const idEliminar = ID_USUARIO_A_ELIMINAR;
- 
+
     // 2. Lógica de la Prueba
     const response = await request(app)
       .patch(`/api/usuarios/${idEliminar}`)
       .set('x-token', TOKEN_VALIDO);
- 
+
     // 3. Verificación (Assert)
     expect(response.status).toBe(200);
     expect(response.body.ok).toBe(true);
     expect(response.body.msg).toMatch(/eliminado/i);
   });
 });
- 
- 
+
+
 // PRUEBA 9 — Desbloquear usuario
 describe('Desbloquear usuario bloqueado', () => {
   test('Debe retornar 200 confirmando que el usuario fue desbloqueado', async () => {
     // 1. Preparación de la prueba
     const idDesbloquear = ID_USUARIO_A_DESBLOQUEAR;
- 
+
     // 2. Lógica de la Prueba
     const response = await request(app)
       .post(`/api/usuarios/desbloquear/${idDesbloquear}`)
       .set('x-token', TOKEN_VALIDO);
- 
+
     // 3. Verificación (Assert)
     expect(response.status).toBe(200);
     expect(response.body.ok).toBe(true);
     expect(response.body.msg).toMatch(/desbloqueado/i);
   });
 });
- 
- 
+
+
 // PRUEBA 10 — Crear usuario sin campos obligatorios
 describe('Crear usuario sin campos obligatorios', () => {
   test('Debe retornar 400 indicando que faltan campos requeridos', async () => {
@@ -272,16 +286,15 @@ describe('Crear usuario sin campos obligatorios', () => {
       email:    `irocha@${DOMINIO_PERMITIDO}`,
       password: 'Admin1234!'
     };
- 
+
     // 2. Lógica de la Prueba
     const response = await request(app)
       .post('/api/usuarios/new')
       .set('x-token', TOKEN_VALIDO)
       .send(usuarioIncompleto);
- 
+
     // 3. Verificación (Assert)
     expect(response.status).toBe(400);
     expect(response.body.ok).toBe(false);
   });
 });
-
