@@ -18,14 +18,14 @@ exports.getResumenMapa = async (req, res) => {
         p.latitud,
         p.longitud,
         COUNT(DISTINCT s.id_sacramento)::int                                          AS total_sacramentos,
-        COUNT(DISTINCT CASE WHEN t.nombre ILIKE 'bautiz%' OR t.nombre ILIKE 'bautism%'
+        COUNT(DISTINCT CASE WHEN s.tipo_sacramento_id_tipo = 1
               THEN s.id_sacramento END)::int                                          AS bautismos,
-        COUNT(DISTINCT CASE WHEN t.nombre ILIKE 'matri%' OR t.nombre ILIKE 'boda%'
+        COUNT(DISTINCT CASE WHEN s.tipo_sacramento_id_tipo = 2
               THEN s.id_sacramento END)::int                                          AS matrimonios,
-        COUNT(DISTINCT CASE WHEN t.nombre ILIKE 'confirm%'
-              THEN s.id_sacramento END)::int                                          AS confirmaciones,
-        COUNT(DISTINCT CASE WHEN t.nombre ILIKE 'comuni%'
+        COUNT(DISTINCT CASE WHEN s.tipo_sacramento_id_tipo = 3
               THEN s.id_sacramento END)::int                                          AS comuniones,
+        COUNT(DISTINCT CASE WHEN s.tipo_sacramento_id_tipo = 4
+              THEN s.id_sacramento END)::int                                          AS confirmaciones,
         COUNT(DISTINCT ps.persona_id_persona)::int                                   AS total_fieles
       FROM ${T_PARROQUIA} p
       LEFT JOIN ${T_SACRAMENTO} s  ON s.institucion_parroquia_id_parroquia = p.id_parroquia
