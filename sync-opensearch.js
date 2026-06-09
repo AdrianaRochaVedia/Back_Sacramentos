@@ -33,6 +33,12 @@ async function migrarDatosMasivos() {
                   }).join(' ')
                 : '';
 
+            const carnetsInvolucrados = s.personaSacramentos
+                ? s.personaSacramentos
+                    .map(rel => (rel.persona.carnet_identidad || '').trim().toLowerCase())
+                    .filter(Boolean)
+                : [];
+
             await opensearch.index({
                 index: 'sacramentos',
                 id: s.id_sacramento.toString(),
@@ -43,8 +49,9 @@ async function migrarDatosMasivos() {
                     fecha_sacramento: s.fecha_sacramento,
                     tipo_sacramento_id: s.tipo_sacramento_id_tipo,
                     parroquia_id: s.institucion_parroquia_id_parroquia,
-                    texto_ocr: '', // Datos antiguos creados manuales no tienen OCR
-                    personas_involucradas: nombresInvolucrados.trim()
+                    texto_ocr: '',
+                    personas_involucradas: nombresInvolucrados.trim(),
+                    carnets_involucrados: carnetsInvolucrados
                 }
             });
         }

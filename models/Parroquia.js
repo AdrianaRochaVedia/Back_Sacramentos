@@ -24,6 +24,14 @@ const Parroquia = sequelize.define('Parroquia', {
     type: DataTypes.STRING(100),
     allowNull: false,
     unique: true
+  },
+  latitud: {
+    type: DataTypes.DECIMAL(10, 8),
+    allowNull: true
+  },
+  longitud: {
+    type: DataTypes.DECIMAL(11, 8),
+    allowNull: true
   }
 }, {
   tableName: 'institucion_parroquia',

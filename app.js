@@ -29,7 +29,7 @@ app.disable('x-powered-by');
 const ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'https://fronttaller0.vercel.app',
-  'http://sacra360.s3-website-us-east-1.amazonaws.com','https://reportes-t86w.onrender.com/graphql','http://18.191.216.95:3000',
+  'http://sacra360.s3-website-us-east-1.amazonaws.com','https://reportes-t86w.onrender.com/graphql','http://34.228.140.187:3000',
 ];
 
 app.use(cors({
@@ -51,7 +51,7 @@ app.use(helmet({
       fontSrc:      ["'self'", 'https://fonts.gstatic.com'],
       scriptSrc:    ["'self'", "'unsafe-inline'"],
       imgSrc:       ["'self'", 'data:', 'https:'],
-      connectSrc:   ["'self'", ...ALLOWED_ORIGINS, 'https://back-sacramentos.onrender.com','https://reportes-t86w.onrender.com/graphql','http://18.191.216.95:3000','https://*', 'http://*'],
+      connectSrc:   ["'self'", ...ALLOWED_ORIGINS, 'https://back-sacramentos.onrender.com','https://reportes-t86w.onrender.com/graphql','http://34.228.140.187:3000','https://*', 'http://*'],
       objectSrc:    ["'none'"],
       baseUri:      ["'self'"],
       formAction:   ["'self'"],
@@ -138,6 +138,9 @@ app.use('/api/test', require('./routes/test.routes'));
 app.use('/api/dominio-permitido',       require('./routes/dominioPermitidoRoute'));
 app.use('/api/usuario-parroquia',       require('./routes/usuarioParroquia'));
 app.use('/api/riesgos', require('./routes/riesgos'));
+app.use('/api/mapa',    require('./routes/mapaRoutes'));
+app.use('/api/activos',          require('./routes/activosInformacion'));
+app.use('/api/vulnerabilidades', require('./routes/vulnerabilidades'));
 
 app.get('/api/proxy-pdf', async (req, res) => {
   const { url, name = 'documento.pdf' } = req.query;

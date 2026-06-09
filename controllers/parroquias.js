@@ -134,7 +134,7 @@ const getParroquias = async (req, res = response) => {
 
 const crearParroquia = async (req, res) => {
 
-  const { nombre, direccion, telefono, email, id_usuario } = req.body;
+  const { nombre, direccion, telefono, email, id_usuario, latitud, longitud } = req.body;
 
   try {
 
@@ -205,6 +205,10 @@ const crearParroquia = async (req, res) => {
       telefono,
 
       email,
+
+      latitud:  latitud  !== undefined ? latitud  : null,
+
+      longitud: longitud !== undefined ? longitud : null,
 
     });
 
@@ -296,7 +300,7 @@ const getParroquia = async (req, res) => {
 //Funcion para editar a la persona
 const actualizarParroquia = async (req, res = response) => {
   const { id } = req.params;
-  const { nombre, direccion, telefono, email, id_usuario } = req.body;
+  const { nombre, direccion, telefono, email, id_usuario, latitud, longitud } = req.body;
 
   try {
     const parroquia = await Parroquia.findOne({
@@ -315,6 +319,8 @@ const actualizarParroquia = async (req, res = response) => {
     if (direccion !== undefined) updates.direccion = direccion;
     if (telefono !== undefined) updates.telefono = telefono;
     if (email !== undefined) updates.email = email;
+    if (latitud !== undefined) updates.latitud = latitud;
+    if (longitud !== undefined) updates.longitud = longitud;
 
     await parroquia.update(updates);
 

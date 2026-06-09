@@ -91,7 +91,8 @@ async function indexarSacramento({
   tipo_sacramento_id,
   parroquia_id,
   texto_ocr = '',
-  personas_involucradas = ''
+  personas_involucradas = '',
+  carnets_involucrados = []
 }) {
   const guardado = await indexarDocumento(id_sacramento, {
     id_sacramento,
@@ -101,7 +102,8 @@ async function indexarSacramento({
     tipo_sacramento_id: Number(tipo_sacramento_id),
     parroquia_id: parroquia_id ? Number(parroquia_id) : null,
     texto_ocr,
-    personas_involucradas: personas_involucradas.trim()
+    personas_involucradas: personas_involucradas.trim(),
+    carnets_involucrados: Array.isArray(carnets_involucrados) ? carnets_involucrados : []
   });
 
   if (!guardado) {
@@ -201,11 +203,12 @@ async function buscarPorPersonaYTipo({
       });
     }
 
-    if (documentoIdentidad) {
+    if (documentoIdentidad && documentoIdentidad.trim().length > 0) {
       mustClauses.push({
-        multi_match: {
-          query: documentoIdentidad,
-          fields: ['texto_ocr', 'personas_involucradas']
+        wildcard: {
+          carnets_involucrados: {
+            value: `*${documentoIdentidad.trim().toLowerCase()}*`
+          }
         }
       });
     }

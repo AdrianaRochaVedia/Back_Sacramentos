@@ -343,13 +343,33 @@ const crearSacramentoCompleto = async (req, res) => {
     // =================================================================
     // ENLACE CON AWS OPENSEARCH - CREACIÓN MANUAL
     // =================================================================
-    const { foja, numero, fecha_sacramento, tipo_sacramento_id_tipo, parroquiaId, relaciones } = req.body;
+    const { foja, numero, fecha_sacramento, tipo_sacramento_id_tipo, parroquiaId } = req.body;
 
-    // Unimos los nombres del array de relaciones para que el buscador global los localice directamente
-    const nombresInvolucrados = relaciones && Array.isArray(relaciones)
-      ? relaciones.map(r => r.nombre_completo || r.nombre || '').join(' ')
-      : '';
+    // 1. Buscamos a las personas en la BD, incluyendo nombres y apellidos
+    const personasDB = await PersonaSacramento.findAll({
+      where: { sacramento_id_sacramento: sacramento.id_sacramento },
+      include: [{ 
+        model: Persona, 
+        as: 'persona', 
+        attributes: ['carnet_identidad', 'nombre', 'apellido_paterno', 'apellido_materno'] 
+      }]
+    });
 
+    // 2. Extraemos los carnets
+    const carnetsInvolucrados = personasDB
+      .map(ps => (ps.persona?.carnet_identidad || '').trim().toLowerCase())
+      .filter(Boolean);
+
+    // 3. Armamos la cadena de nombres completos para la búsqueda global
+    const nombresInvolucrados = personasDB
+      .map(ps => {
+        const p = ps.persona;
+        if (!p) return '';
+        return `${p.nombre || ''} ${p.apellido_paterno || ''} ${p.apellido_materno || ''}`.trim();
+      })
+      .join(' ');
+
+    // 4. Indexamos en OpenSearch
     await indexarSacramento({
       id_sacramento:         sacramento.id_sacramento,
       foja,
@@ -357,8 +377,9 @@ const crearSacramentoCompleto = async (req, res) => {
       fecha_sacramento,
       tipo_sacramento_id:    tipo_sacramento_id_tipo,
       parroquia_id:          parroquiaId,
-      texto_ocr:             '', // Al ser creación manual limpia, se inicializa vacío
-      personas_involucradas: nombresInvolucrados.trim()
+      texto_ocr:             '',
+      personas_involucradas: nombresInvolucrados,
+      carnets_involucrados:  carnetsInvolucrados
     });
     // =================================================================
 
@@ -387,12 +408,24 @@ const buscarSacramentosPorPersona = async (req, res) => {
       ci,
       carnet_identidad,
       tipo_sacramento_id_tipo,
+      rol_sacramento_id_rol_sacra,
       page = 1,
       limit = 10
     } = req.query;
 
     if (!tipo_sacramento_id_tipo) {
       return res.status(400).json({ ok: false, msg: "Debe enviar tipo_sacramento_id_tipo" });
+    }
+
+    // Filtros de persona y rol que se aplican en PostgreSQL (en ambos caminos)
+    const wherePersona = {};
+    if (nombre)            wherePersona.nombre            = { [Op.iLike]: `%${nombre}%` };
+    if (apellido_paterno)  wherePersona.apellido_paterno  = { [Op.iLike]: `%${apellido_paterno}%` };
+    if (apellido_materno)  wherePersona.apellido_materno  = { [Op.iLike]: `%${apellido_materno}%` };
+
+    const wherePS = {};
+    if (rol_sacramento_id_rol_sacra) {
+      wherePS.rol_sacramento_id_rol_sacra = Number(rol_sacramento_id_rol_sacra);
     }
 
     // ==========================================
@@ -402,6 +435,8 @@ const buscarSacramentosPorPersona = async (req, res) => {
     let textoPersona = `${nombre || ''} ${apellido_paterno || ''} ${apellido_materno || ''}`.trim();
     const documentoIdentidad = ci || carnet_identidad;
 
+    if (documentoIdentidad) wherePersona.carnet_identidad = { [Op.iLike]: `%${documentoIdentidad}%` };
+
     const { fuente, ids, total } = await buscarPorPersonaYTipo({
       tipo_sacramento_id: tipo_sacramento_id_tipo,
       textoPersona,
@@ -410,15 +445,15 @@ const buscarSacramentosPorPersona = async (req, res) => {
       limit: Number(limit)
     });
 
-    // Si OpenSearch no esta disponible, hacemos la búsqueda directa en Postgres
-    if (fuente === 'no_disponible' || fuente === 'error') {
-      console.log('[Busqueda] Búsqueda por persona realizada directamente en PostgreSQL.');
+    // Si OpenSearch no esta disponible, o devolvió 0 resultados buscando por carnet
+    // (puede pasar si los datos no están sincronizados), hacemos la búsqueda en Postgres.
+    const usarPostgres =
+      fuente === 'no_disponible' ||
+      fuente === 'error' ||
+      (ids.length === 0 && !!documentoIdentidad);
 
-      const wherePersona = {};
-      if (nombre)           wherePersona.nombre           = { [Op.iLike]: `%${nombre}%` };
-      if (apellido_paterno) wherePersona.apellido_paterno = { [Op.iLike]: `%${apellido_paterno}%` };
-      if (apellido_materno) wherePersona.apellido_materno = { [Op.iLike]: `%${apellido_materno}%` };
-      if (documentoIdentidad) wherePersona.carnet_identidad = { [Op.iLike]: `%${documentoIdentidad}%` };
+    if (usarPostgres) {
+      console.log('[Busqueda] Búsqueda por persona realizada directamente en PostgreSQL.');
 
       const offset = (Number(page) - 1) * Number(limit);
 
@@ -429,9 +464,11 @@ const buscarSacramentosPorPersona = async (req, res) => {
             model: PersonaSacramento,
             as: "personaSacramentos",
             required: true,
+            where: Object.keys(wherePS).length > 0 ? wherePS : undefined,
             include: [{
               model: Persona,
               as: "persona",
+              required: Object.keys(wherePersona).length > 0,
               where: Object.keys(wherePersona).length > 0 ? wherePersona : undefined
             }]
           },
@@ -475,7 +512,7 @@ const buscarSacramentosPorPersona = async (req, res) => {
     // ==========================================
 
     // ==========================================
-    // 2. RECUPERAR DATOS COMPLETOS DE POSTGRES (cuando OpenSearch respondió)
+    // 2. RECUPERAR DATOS COMPLETOS DE POSTGRES (cuando OpenSearch respondió con resultados)
     // ==========================================
     if (ids.length === 0) {
       return res.json({
@@ -488,7 +525,7 @@ const buscarSacramentosPorPersona = async (req, res) => {
       });
     }
 
-    // Obtenemos solo los IDs exactos de los sacramentos donde aparece esta persona
+    // Filtramos por IDs de OpenSearch + rol/persona en PostgreSQL
     const rows = await Sacramento.findAll({
       where: {
         id_sacramento: ids,
@@ -499,7 +536,13 @@ const buscarSacramentosPorPersona = async (req, res) => {
           model: PersonaSacramento,
           as: "personaSacramentos",
           required: true,
-          include: [{ model: Persona, as: "persona" }]
+          where: Object.keys(wherePS).length > 0 ? wherePS : undefined,
+          include: [{
+            model: Persona,
+            as: "persona",
+            required: Object.keys(wherePersona).length > 0,
+            where: Object.keys(wherePersona).length > 0 ? wherePersona : undefined
+          }]
         },
         { model: TipoSacramento, as: "tipoSacramento" },
         { model: Parroquia, as: "parroquia" },
@@ -820,16 +863,33 @@ const actualizarSacramentoCompleto = async (req, res) => {
     // =================================================================
     // ENLACE CON AWS OPENSEARCH - ACTUALIZACIÓN / EDICIÓN
     // =================================================================
-    const { foja, numero, fecha_sacramento, tipo_sacramento_id_tipo, parroquiaId, relaciones } = req.body;
+    const { foja, numero, fecha_sacramento, tipo_sacramento_id_tipo, parroquiaId } = req.body;
 
-    // Parseamos relaciones en caso de que vengan serializadas como string
-    const relacionesArray = typeof relaciones === 'string' ? JSON.parse(relaciones) : relaciones;
+    // 1. Buscamos a las personas en la BD, incluyendo nombres y apellidos
+    const personasDB = await PersonaSacramento.findAll({
+      where: { sacramento_id_sacramento: Number(id_sacramento) },
+      include: [{ 
+        model: Persona, 
+        as: 'persona', 
+        attributes: ['carnet_identidad', 'nombre', 'apellido_paterno', 'apellido_materno'] 
+      }]
+    });
 
-    const nombresInvolucrados = relacionesArray && Array.isArray(relacionesArray)
-      ? relacionesArray.map(r => r.nombre_completo || r.nombre || '').join(' ')
-      : '';
+    // 2. Extraemos los carnets
+    const carnetsInvolucrados = personasDB
+      .map(ps => (ps.persona?.carnet_identidad || '').trim().toLowerCase())
+      .filter(Boolean);
 
-    // La operación index con un ID existente actúa automáticamente como un "Update" total
+    // 3. Armamos la cadena de nombres completos actualizados
+    const nombresInvolucrados = personasDB
+      .map(ps => {
+        const p = ps.persona;
+        if (!p) return '';
+        return `${p.nombre || ''} ${p.apellido_paterno || ''} ${p.apellido_materno || ''}`.trim();
+      })
+      .join(' ');
+
+    // 4. Actualizamos el índice en OpenSearch
     await indexarSacramento({
       id_sacramento:         Number(id_sacramento),
       foja,
@@ -837,9 +897,8 @@ const actualizarSacramentoCompleto = async (req, res) => {
       fecha_sacramento,
       tipo_sacramento_id:    tipo_sacramento_id_tipo,
       parroquia_id:          parroquiaId,
-      // Nota: Mantenemos el texto_ocr original si existía haciendo una actualización parcial, 
-      // o mapeando los campos necesarios para no perder el histórico del documento analizado.
-      personas_involucradas: nombresInvolucrados.trim()
+      personas_involucradas: nombresInvolucrados,
+      carnets_involucrados:  carnetsInvolucrados
     });
     // =================================================================
 
