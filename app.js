@@ -138,6 +138,7 @@ app.use('/api/test', require('./routes/test.routes'));
 app.use('/api/dominio-permitido',       require('./routes/dominioPermitidoRoute'));
 app.use('/api/usuario-parroquia',       require('./routes/usuarioParroquia'));
 app.use('/api/riesgos', require('./routes/riesgos'));
+app.use('/api/mapa',   require('./routes/mapaRoutes'));
 
 app.get('/api/proxy-pdf', async (req, res) => {
   const { url, name = 'documento.pdf' } = req.query;
