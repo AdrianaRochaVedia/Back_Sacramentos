@@ -141,6 +141,7 @@ app.use('/api/riesgos', require('./routes/riesgos'));
 app.use('/api/mapa',    require('./routes/mapaRoutes'));
 app.use('/api/activos',          require('./routes/activosInformacion'));
 app.use('/api/vulnerabilidades', require('./routes/vulnerabilidades'));
+app.use('/api/chatbot', require('./routes/chatbot'));
 
 app.get('/api/proxy-pdf', async (req, res) => {
   const { url, name = 'documento.pdf' } = req.query;
