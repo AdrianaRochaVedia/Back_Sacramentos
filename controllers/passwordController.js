@@ -43,7 +43,7 @@ exports.solicitar = async (req, res) => {
 
     try {
       const appName  = process.env.APP_NAME || 'Sacramentos';
-      const tpl      = resetPasswordEmail({ appName, resetUrl: url, minutes: TOKEN_TTL_MINUTES });
+      const tpl      = resetPasswordEmail({ appName, resetUrl: url, minutes: TOKEN_TTL_MINUTES, nombre_usuario: usuario.nombre_usuario });
       await sendMail({ to: email, subject: tpl.subject, html: tpl.html, text: tpl.text });
     } catch (mailErr) {
       return res.status(400).json({ ok: false, msg: 'No se pudo enviar el correo de recuperación. Verifica que la dirección sea válida.' });
