@@ -13,7 +13,7 @@ const generarNombreUsuario = async (Usuario, { nombre, apellido_paterno, apellid
   const base = `${normalizar(apellido_paterno)}.${normalizar(nombre)}`;
 
   const existeOtro = async (candidato) => {
-    const where = { nombre_usuario: candidato };
+    const where = { nombre_usuario: candidato, activo: true };
     if (id_usuario) where.id_usuario = { [Op.ne]: id_usuario };
     return !!(await Usuario.findOne({ where }));
   };
