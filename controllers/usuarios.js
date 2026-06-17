@@ -21,11 +21,11 @@ const verificarExpiracion = require('../helpers/seguridad/verificarExpiracion');
 const { generarCodigo2FA } = require('../helpers/twoFactorCode');
 const { generarToken2FA, verificarToken2FA } = require('../helpers/twoFactorToken');
 const { sendMail } = require('../helpers/mailer');
-const { validarEmailZeroBounce, emailEsEnviable } = require('../helpers/emailValidator');
 const {
   twoFactorEmail,
   cuentaDesbloqueadaEmail
 } = require('../helpers/emailTemplates');
+const { generarNombreUsuario } = require('../helpers/generarNombreUsuario');
 
 const { sincronizarUsuarioParroquias } = require('../helpers/SincronizacionParroquias');
 
@@ -282,15 +282,6 @@ const crearUsuario = async (req, res) => {
       });
     }
 
-    // ── Validar correo con ZeroBounce antes de crear el usuario ──
-    const zbResultado = await validarEmailZeroBounce(email);
-    if (!emailEsEnviable(zbResultado)) {
-      return res.status(400).json({
-        ok: false,
-        msg: 'El correo no es válido o no puede recibir mensajes. Verifica la dirección.'
-      });
-    }
-
     let rolExiste = null;
 
     if (id_rol) {
@@ -330,7 +321,15 @@ const crearUsuario = async (req, res) => {
     const fecha_expiracion = new Date();
     fecha_expiracion.setDate(fecha_expiracion.getDate() + config.vida_util_password_dias);
 
+    const nombre_usuario = await generarNombreUsuario(Usuario, {
+      nombre,
+      apellido_paterno,
+      apellido_materno,
+      fecha_nacimiento,
+    });
+
     const usuario = await Usuario.create({
+      nombre_usuario,
       nombre,
       apellido_paterno,
       apellido_materno,
@@ -460,11 +459,21 @@ const loginUsuario = async (req, res) => {
     // }
 
     const usuario = await Usuario.findOne({
-      where: { email, activo: true },
+      where: {
+        [Op.or]: [
+          { email },
+          { nombre_usuario: email }
+        ],
+        activo: true
+      },
       include: [
-        { model: Rol,      as: 'rol',       attributes: ['id_rol', 'nombre'] },
-        { model: Parroquia, as: 'parroquias', attributes: ['id_parroquia', 'nombre'],
-          through: { attributes: [], where: { activo: true } }, required: false }
+        { model: Rol, as: 'rol', attributes: ['id_rol', 'nombre'] },
+        {
+          model: Parroquia, as: 'parroquias',
+          attributes: ['id_parroquia', 'nombre'],
+          through: { attributes: [], where: { activo: true } },
+          required: false
+        }
       ]
     });
 
@@ -561,6 +570,7 @@ const loginUsuario = async (req, res) => {
       ok: true,
       requiere2FA: false,
       uid:    usuario.id_usuario,
+      nombre_usuario: usuario.nombre_usuario, 
       email:  usuario.email,
       nombre: usuario.nombre,
       rol:    usuario.rol,
@@ -647,6 +657,7 @@ const verificarCodigo2FA = async (req, res) => {
       ok: true,
       requiere2FA: false,
       uid:    usuario.id_usuario,
+      nombre_usuario: usuario.nombre_usuario, 
       email:  usuario.email,
       nombre: usuario.nombre,
       rol:    usuario.rol,
