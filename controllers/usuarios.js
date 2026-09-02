@@ -734,20 +734,27 @@ const actualizarUsuario = async (req, res = response) => {
       ? (apellido_materno?.trim() || null)
       : usuario.apellido_materno;
 
-    const whereNombreEdit = {
-      nombre:           { [Op.iLike]: nombreFinal },
-      apellido_paterno: { [Op.iLike]: apellidoPaternoFinal },
-      apellido_materno: apellidoMaternoFinal
-        ? { [Op.iLike]: apellidoMaternoFinal }
-        : null,
-      id_usuario: { [Op.ne]: id }
-    };
-    const nombreDuplicadoEdit = await Usuario.findOne({ where: whereNombreEdit });
-    if (nombreDuplicadoEdit) {
-      return res.status(400).json({
-        ok: false,
-        msg: 'Ya existe un usuario con el mismo nombre completo'
-      });
+    const nombreCambio =
+      nombreFinal.toLowerCase() !== usuario.nombre.toLowerCase() ||
+      apellidoPaternoFinal.toLowerCase() !== usuario.apellido_paterno.toLowerCase() ||
+      (apellidoMaternoFinal || '').toLowerCase() !== (usuario.apellido_materno || '').toLowerCase();
+
+    if (nombreCambio) {
+      const whereNombreEdit = {
+        nombre:           { [Op.iLike]: nombreFinal },
+        apellido_paterno: { [Op.iLike]: apellidoPaternoFinal },
+        apellido_materno: apellidoMaternoFinal
+          ? { [Op.iLike]: apellidoMaternoFinal }
+          : null,
+        id_usuario: { [Op.ne]: id }
+      };
+      const nombreDuplicadoEdit = await Usuario.findOne({ where: whereNombreEdit });
+      if (nombreDuplicadoEdit) {
+        return res.status(400).json({
+          ok: false,
+          msg: 'Ya existe un usuario con el mismo nombre completo'
+        });
+      }
     }
 
     const includeUsuario = [
