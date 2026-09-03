@@ -19,6 +19,7 @@ const TIPO = {
   BAUTIZO:      1,
   MATRIMONIO:   2,
   COMUNION:     3,
+  CONFIRMACION: 4,
 };
 
 // Roles que necesita tener un PADRINO antes de serlo
@@ -96,9 +97,10 @@ const validarFechasSacramento = async ({ tipo_sacramento_id_tipo, fecha_sacramen
 
   // Persona principal según tipo
   const rolPrincipal = {
-    [TIPO.BAUTIZO]:    ROL.BAUTIZADO,
-    [TIPO.COMUNION]:   ROL.COMULGADO,
-    [TIPO.MATRIMONIO]: null, // matrimonio tiene esposo Y esposa
+    [TIPO.BAUTIZO]:      ROL.BAUTIZADO,
+    [TIPO.COMUNION]:     ROL.COMULGADO,
+    [TIPO.CONFIRMACION]: ROL.CONFIRMADO,
+    [TIPO.MATRIMONIO]:   null, // matrimonio tiene esposo Y esposa
   };
 
   // ── Validaciones por persona según su rol ────────────────────────────────
@@ -129,6 +131,31 @@ const validarFechasSacramento = async ({ tipo_sacramento_id_tipo, fecha_sacramen
         throw new Error(
           `${nombrePersona}: su bautizo (${fmt(fechaBautizo)}) debe ser anterior ` +
           `a la Primera Comunión (${fmt(fechaSacramento)})`
+        );
+      }
+    }
+
+    // CONFIRMADO — debe tener bautizo Y Primera Comunión previos
+    if (rolId === ROL.CONFIRMADO) {
+      const fechaBautizo = await getFechaSacramento(persona_id, ROL.BAUTIZADO);
+      if (!fechaBautizo) {
+        throw new Error(`${nombrePersona}: debe estar bautizado antes de recibir la Confirmación`);
+      }
+      if (fechaBautizo >= fechaSacramento) {
+        throw new Error(
+          `${nombrePersona}: su bautizo (${fmt(fechaBautizo)}) debe ser anterior ` +
+          `a la Confirmación (${fmt(fechaSacramento)})`
+        );
+      }
+
+      const fechaComunion = await getFechaSacramento(persona_id, ROL.COMULGADO);
+      if (!fechaComunion) {
+        throw new Error(`${nombrePersona}: debe haber recibido la Primera Comunión antes de la Confirmación`);
+      }
+      if (fechaComunion >= fechaSacramento) {
+        throw new Error(
+          `${nombrePersona}: su Primera Comunión (${fmt(fechaComunion)}) debe ser anterior ` +
+          `a la Confirmación (${fmt(fechaSacramento)})`
         );
       }
     }

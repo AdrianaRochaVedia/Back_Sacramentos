@@ -57,7 +57,7 @@ const tools = [
           foja: { type: 'string', description: 'Número de foja del libro.' },
           numero: { type: 'string', description: 'Número de acta.' },
           fecha_sacramento: { type: 'string', description: 'Fecha del sacramento en formato YYYY-MM-DD.' },
-          tipo_sacramento_id_tipo: { type: 'string', enum: ['1', '2', '3'], description: '1 = Bautizo, 2 = Matrimonio, 3 = Comunión.' }
+          tipo_sacramento_id_tipo: { type: 'string', enum: ['1', '2', '3', '4'], description: '1 = Bautizo, 2 = Matrimonio, 3 = Comunión, 4 = Confirmación.' }
         }
       }
     }
@@ -74,7 +74,7 @@ const tools = [
           apellido_paterno: { type: 'string', description: 'Primer apellido.' },
           apellido_materno: { type: 'string', description: 'Segundo apellido.' },
           ci: { type: 'string', description: 'Carnet de identidad.' },
-          tipo_sacramento_id_tipo: { type: 'string', enum: ['1', '2', '3'], description: 'OBLIGATORIO. 1 = Bautizo, 2 = Matrimonio, 3 = Comunión.' }
+          tipo_sacramento_id_tipo: { type: 'string', enum: ['1', '2', '3', '4'], description: 'OBLIGATORIO. 1 = Bautizo, 2 = Matrimonio, 3 = Comunión, 4 = Confirmación.' }
         },
         required: ['tipo_sacramento_id_tipo']
       }
