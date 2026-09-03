@@ -1,3 +1,4 @@
+const { Op } = require('sequelize');
 const UsuarioParroquia = require('../models/UsuarioParroquia');
 const Usuario = require('../models/Usuario');
 const Rol = require('../models/Rol');
@@ -187,6 +188,35 @@ const actualizarAsignacion = async (req, res) => {
         ok: false,
         msg: 'Asignación no encontrada',
       });
+    }
+
+    const idUsuarioFinal    = id_usuario        !== undefined ? id_usuario        : asignacion.id_usuario;
+    const idParroquiaFinal  = id_parroquia      !== undefined ? id_parroquia      : asignacion.id_parroquia;
+    const rolFinal          = rol_en_parroquia  !== undefined ? rol_en_parroquia  : asignacion.rol_en_parroquia;
+    const activoFinal       = activo            !== undefined ? (activo === true || activo === 'true') : asignacion.activo;
+
+    const combinacionCambio =
+      Number(idUsuarioFinal) !== Number(asignacion.id_usuario) ||
+      Number(idParroquiaFinal) !== Number(asignacion.id_parroquia) ||
+      rolFinal !== asignacion.rol_en_parroquia;
+
+    if (activoFinal && combinacionCambio) {
+      const yaExiste = await UsuarioParroquia.findOne({
+        where: {
+          id_usuario: idUsuarioFinal,
+          id_parroquia: idParroquiaFinal,
+          rol_en_parroquia: rolFinal,
+          activo: true,
+          id_usuario_parroquia: { [Op.ne]: id },
+        },
+      });
+
+      if (yaExiste) {
+        return res.status(400).json({
+          ok: false,
+          msg: 'El usuario ya tiene esa asignación activa en la parroquia',
+        });
+      }
     }
 
     if (id_usuario !== undefined) asignacion.id_usuario = id_usuario;

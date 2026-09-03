@@ -1,4 +1,4 @@
-function resetPasswordEmail({ appName, resetUrl, minutes = 30 }) {
+function resetPasswordEmail({ appName, resetUrl, minutes = 30, nombre_usuario }) {
   const subject = `${appName} – Restablecer contraseña`;
   const text =
 `Recibimos una solicitud para restablecer tu contraseña de ${appName}.
@@ -10,6 +10,11 @@ Este enlace vence en ${minutes} minutos. Si no fuiste tú, ignora este mensaje.`
   const html = `
   <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;">
     <h2>${appName} – Restablecer contraseña</h2>
+    <p>Tu nombre de usuario es:</p>
+      <div style="background:#f4f4f4; padding:12px; border-radius:8px; font-size:20px; 
+        font-weight:bold; letter-spacing:1px; text-align:center;">
+      ${nombre_usuario}
+    </div>
     <p>Recibimos una solicitud para restablecer tu contraseña.</p>
     <p>Haz clic en el botón para continuar. El enlace vence en <strong>${minutes} minutos</strong>.</p>
     <p style="text-align:center;">

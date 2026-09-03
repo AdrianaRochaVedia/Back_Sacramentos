@@ -1,4 +1,5 @@
 const { response } = require('express');
+const { Op } = require('sequelize');
 const TipoSacramento = require('../models/TipoSacramento');
 
 // Obtener todos los tipos de sacramento activos
@@ -119,6 +120,15 @@ const actualizarTipoSacramento = async (req, res = response) => {
             });
         }
         
+        if (nombre !== undefined && nombre !== tipo.nombre) {
+            const existe = await TipoSacramento.findOne({
+                where: { nombre, id_tipo: { [Op.ne]: id } }
+            });
+            if (existe) {
+                return res.status(400).json({ ok: false, msg: 'El tipo de sacramento ya está registrado' });
+            }
+        }
+
         const updates = {};
         if (nombre !== undefined) updates.nombre = nombre;
         if (descripcion !== undefined) updates.descripcion = descripcion;

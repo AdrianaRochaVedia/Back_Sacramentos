@@ -82,7 +82,7 @@ const updateActivo = async (req, res) => {
 
     const { nombre } = req.body;
 
-    if (nombre !== undefined) {
+    if (nombre !== undefined && nombre.trim().toLowerCase() !== activo.nombre.trim().toLowerCase()) {
       if (!String(nombre).trim())
         return res.status(400).json({ ok: false, msg: 'El nombre del activo no puede estar vacío' });
 

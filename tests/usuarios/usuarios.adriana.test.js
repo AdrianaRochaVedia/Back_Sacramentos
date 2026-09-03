@@ -10,11 +10,6 @@ const ID_USUARIO_INEXISTENTE  = 999999;
 let ID_USUARIO_A_ELIMINAR;
 let ID_USUARIO_A_DESBLOQUEAR;
 
-jest.mock('../../helpers/emailValidator', () => ({
-  validarEmailZeroBounce: jest.fn().mockResolvedValue({ status: 'valid' }),
-  emailEsEnviable:        jest.fn().mockReturnValue(true),
-}));
-
 jest.mock('../../helpers/validarFormatoCorreo', () => ({
   validarFormatoCorreo: jest.fn().mockReturnValue({ ok: true }),
 }));

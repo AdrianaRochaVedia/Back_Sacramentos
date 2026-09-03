@@ -11,6 +11,10 @@ const Usuario = sequelize.define('Usuario', {
     autoIncrement: true,
     allowNull: false
   },
+  nombre_usuario: {
+    type: DataTypes.STRING(100),
+    allowNull: false,
+  },
   nombre: {
     type: DataTypes.STRING(100),
     allowNull: false

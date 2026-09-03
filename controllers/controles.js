@@ -139,7 +139,7 @@ const updateControl = async (req, res) => {
       });
 
     // Duplicado: misma descripción en otro control del mismo riesgo
-    if (descripcion !== undefined) {
+    if (descripcion !== undefined && descripcion.trim().toLowerCase() !== control.descripcion.trim().toLowerCase()) {
       const existe = await Control.findOne({
         where: {
           riesgo_id:   riesgo.id_riesgo,

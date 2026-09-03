@@ -184,19 +184,6 @@ const actualizarRol = async (req, res) => {
       }
     }
 
-    if (permisos !== undefined) {
-      if (permisos.length === 0)
-        return res.status(400).json({ ok: false, msg: 'El rol debe tener al menos un permiso' });
-
-      const rolDuplicado = await verificarPermisosRepetidos(permisos, id);
-      if (rolDuplicado) {
-        return res.status(400).json({
-          ok: false,
-          msg: `Ya existe el rol "${rolDuplicado.nombre}" con exactamente los mismos permisos`
-        });
-      }
-    }
-
     const includePermisos = [{
       model: Permiso,
       as: 'permisos',
@@ -205,6 +192,23 @@ const actualizarRol = async (req, res) => {
     }];
 
     const rolPrevio = await Rol.findByPk(id, { include: includePermisos });
+
+    if (permisos !== undefined) {
+      if (permisos.length === 0)
+        return res.status(400).json({ ok: false, msg: 'El rol debe tener al menos un permiso' });
+
+      const permisosCambiaron = normalizarIds(permisos) !== normalizarIds(rolPrevio.permisos);
+
+      if (permisosCambiaron) {
+        const rolDuplicado = await verificarPermisosRepetidos(permisos, id);
+        if (rolDuplicado) {
+          return res.status(400).json({
+            ok: false,
+            msg: `Ya existe el rol "${rolDuplicado.nombre}" con exactamente los mismos permisos`
+          });
+        }
+      }
+    }
 
     const updates = {};
 

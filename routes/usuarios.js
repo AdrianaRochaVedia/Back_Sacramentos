@@ -22,7 +22,7 @@ const { validarPermiso } = require('../middlewares/validarPermiso');
 const router = Router();
 router.get('/mis-accesos', validarJWT, getMisAccesos);
 router.post('/', [
-    check('email', 'El email es obligatorio').isEmail(),
+    check('email', 'El email es obligatorio').notEmpty(),
     check('password', 'La contraseña es obligatoria').notEmpty(),
     validarCampos
 ], loginUsuario);

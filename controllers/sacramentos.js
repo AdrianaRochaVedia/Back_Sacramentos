@@ -16,7 +16,6 @@ const {
 const {
   indexarSacramento,
   buscarPorTextoLibre,
-  buscarPorPersonaYTipo,
   opensearchConfigurado
 } = require('../services/opensearch.service'); // <-- AGREGADO
 
@@ -417,143 +416,77 @@ const buscarSacramentosPorPersona = async (req, res) => {
       return res.status(400).json({ ok: false, msg: "Debe enviar tipo_sacramento_id_tipo" });
     }
 
-    // Filtros de persona y rol que se aplican en PostgreSQL (en ambos caminos)
+    // Filtros de persona
     const wherePersona = {};
-    if (nombre)            wherePersona.nombre            = { [Op.iLike]: `%${nombre}%` };
-    if (apellido_paterno)  wherePersona.apellido_paterno  = { [Op.iLike]: `%${apellido_paterno}%` };
-    if (apellido_materno)  wherePersona.apellido_materno  = { [Op.iLike]: `%${apellido_materno}%` };
+    if (nombre?.trim())            wherePersona.nombre            = { [Op.iLike]: `%${nombre.trim()}%` };
+    if (apellido_paterno?.trim())  wherePersona.apellido_paterno  = { [Op.iLike]: `%${apellido_paterno.trim()}%` };
+    if (apellido_materno?.trim())  wherePersona.apellido_materno  = { [Op.iLike]: `%${apellido_materno.trim()}%` };
 
+    const documentoIdentidad = (ci || carnet_identidad)?.trim();
+    if (documentoIdentidad) wherePersona.carnet_identidad = { [Op.iLike]: `%${documentoIdentidad}%` };
+
+    // Filtro de rol en el sacramento
     const wherePS = {};
     if (rol_sacramento_id_rol_sacra) {
       wherePS.rol_sacramento_id_rol_sacra = Number(rol_sacramento_id_rol_sacra);
     }
 
-    // ==========================================
-    // 1. BUSCAR EN OPENSEARCH PRIMERO
-    // ==========================================
-    // Juntamos los nombres y apellidos en una sola cadena de búsqueda difusa
-    let textoPersona = `${nombre || ''} ${apellido_paterno || ''} ${apellido_materno || ''}`.trim();
-    const documentoIdentidad = ci || carnet_identidad;
+    const pageNum  = Math.max(1, Number(page) || 1);
+    const limitNum = Math.max(1, Number(limit) || 10);
+    const offset   = (pageNum - 1) * limitNum;
 
-    if (documentoIdentidad) wherePersona.carnet_identidad = { [Op.iLike]: `%${documentoIdentidad}%` };
-
-    const { fuente, ids, total } = await buscarPorPersonaYTipo({
-      tipo_sacramento_id: tipo_sacramento_id_tipo,
-      textoPersona,
-      documentoIdentidad: documentoIdentidad || '',
-      page:  Number(page),
-      limit: Number(limit)
+    // 1. IDs de los sacramentos que cumplen los filtros (sin límite, para paginar
+    //    manualmente en JS y evitar el error de Postgres al contar con JOINs anidados).
+    const coincidencias = await Sacramento.findAll({
+      attributes: ['id_sacramento'],
+      where: { tipo_sacramento_id_tipo: Number(tipo_sacramento_id_tipo), activo: true },
+      include: [{
+        model: PersonaSacramento,
+        as: "personaSacramentos",
+        required: true,
+        attributes: [],
+        where: Object.keys(wherePS).length > 0 ? wherePS : undefined,
+        include: [{
+          model: Persona,
+          as: "persona",
+          attributes: [],
+          required: Object.keys(wherePersona).length > 0,
+          where: Object.keys(wherePersona).length > 0 ? wherePersona : undefined
+        }]
+      }],
+      order: [['fecha_sacramento', 'DESC'], ['numero', 'DESC']],
+      subQuery: false
     });
 
-    // Si OpenSearch no esta disponible, o devolvió 0 resultados buscando por carnet
-    // (puede pasar si los datos no están sincronizados), hacemos la búsqueda en Postgres.
-    const usarPostgres =
-      fuente === 'no_disponible' ||
-      fuente === 'error' ||
-      (ids.length === 0 && !!documentoIdentidad);
+    const idsUnicos = [...new Set(coincidencias.map(s => s.id_sacramento))];
+    const count = idsUnicos.length;
+    const idsPagina = idsUnicos.slice(offset, offset + limitNum);
 
-    if (usarPostgres) {
-      console.log('[Busqueda] Búsqueda por persona realizada directamente en PostgreSQL.');
-
-      const offset = (Number(page) - 1) * Number(limit);
-
-      const rows = await Sacramento.findAll({
-        where: { tipo_sacramento_id_tipo: Number(tipo_sacramento_id_tipo), activo: true },
-        include: [
-          {
-            model: PersonaSacramento,
-            as: "personaSacramentos",
-            required: true,
-            where: Object.keys(wherePS).length > 0 ? wherePS : undefined,
-            include: [{
-              model: Persona,
-              as: "persona",
-              required: Object.keys(wherePersona).length > 0,
-              where: Object.keys(wherePersona).length > 0 ? wherePersona : undefined
-            }]
-          },
-          { model: TipoSacramento, as: "tipoSacramento" },
-          { model: Parroquia, as: "parroquia" },
-        ],
-        order: [['fecha_sacramento', 'DESC'], ['numero', 'DESC']],
-        limit: Number(limit),
-        offset
-      });
-
-      for (const s of rows) {
-        const relaciones = await PersonaSacramento.findAll({
-          where: { sacramento_id_sacramento: s.id_sacramento },
-          include: [
-            { model: Persona, as: "persona" },
-            { model: RolSacramento, as: "rolSacramento" }
-          ]
-        });
-        s.dataValues.todasRelaciones = relaciones;
-
-        if (s.tipoSacramento?.id_tipo === 2) {
-          const matrimonioDetalle = await MatrimonioDetalle.findOne({
-            where: { sacramento_id_sacramento: s.id_sacramento }
-          });
-          s.dataValues.matrimonioDetalle = matrimonioDetalle;
-        } else {
-          s.dataValues.matrimonioDetalle = null;
-        }
-      }
-
-      return res.json({
-        ok: true,
-        resultados: rows,
-        total: rows.length,
-        totalPages: Math.ceil(rows.length / Number(limit)),
-        currentPage: Number(page),
-        motor_busqueda: 'postgresql'
-      });
-    }
-    // ==========================================
-
-    // ==========================================
-    // 2. RECUPERAR DATOS COMPLETOS DE POSTGRES (cuando OpenSearch respondió con resultados)
-    // ==========================================
-    if (ids.length === 0) {
+    if (idsPagina.length === 0) {
       return res.json({
         ok: true,
         resultados: [],
-        total: 0,
-        totalPages: 0,
-        currentPage: Number(page),
-        motor_busqueda: 'opensearch'
+        total: count,
+        totalPages: Math.ceil(count / limitNum),
+        currentPage: pageNum
       });
     }
 
-    // Filtramos por IDs de OpenSearch + rol/persona en PostgreSQL
+    // 2. Datos completos, solo de los IDs de esta página
     const rows = await Sacramento.findAll({
-      where: {
-        id_sacramento: ids,
-        activo: true
-      },
+      where: { id_sacramento: idsPagina },
       include: [
         {
           model: PersonaSacramento,
           as: "personaSacramentos",
-          required: true,
-          where: Object.keys(wherePS).length > 0 ? wherePS : undefined,
-          include: [{
-            model: Persona,
-            as: "persona",
-            required: Object.keys(wherePersona).length > 0,
-            where: Object.keys(wherePersona).length > 0 ? wherePersona : undefined
-          }]
+          include: [{ model: Persona, as: "persona" }]
         },
         { model: TipoSacramento, as: "tipoSacramento" },
         { model: Parroquia, as: "parroquia" },
       ],
-      order: [
-        ['fecha_sacramento', 'DESC'],
-        ['numero', 'DESC']
-      ]
+      order: [['fecha_sacramento', 'DESC'], ['numero', 'DESC']]
     });
 
-    // Mantenemos tu lógica de mapeo de detalles y relaciones
     for (const s of rows) {
       const relaciones = await PersonaSacramento.findAll({
         where: { sacramento_id_sacramento: s.id_sacramento },
@@ -562,7 +495,6 @@ const buscarSacramentosPorPersona = async (req, res) => {
           { model: RolSacramento, as: "rolSacramento" }
         ]
       });
-
       s.dataValues.todasRelaciones = relaciones;
 
       if (s.tipoSacramento?.id_tipo === 2) {
@@ -578,10 +510,9 @@ const buscarSacramentosPorPersona = async (req, res) => {
     return res.json({
       ok: true,
       resultados: rows,
-      total,
-      totalPages: Math.ceil(total / Number(limit)),
-      currentPage: Number(page),
-      motor_busqueda: 'opensearch'
+      total: count,
+      totalPages: Math.ceil(count / limitNum),
+      currentPage: pageNum
     });
 
   } catch (error) {
