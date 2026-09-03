@@ -435,29 +435,56 @@ const buscarSacramentosPorPersona = async (req, res) => {
     const limitNum = Math.max(1, Number(limit) || 10);
     const offset   = (pageNum - 1) * limitNum;
 
-    const { count, rows } = await Sacramento.findAndCountAll({
+    // 1. IDs de los sacramentos que cumplen los filtros (sin límite, para paginar
+    //    manualmente en JS y evitar el error de Postgres al contar con JOINs anidados).
+    const coincidencias = await Sacramento.findAll({
+      attributes: ['id_sacramento'],
       where: { tipo_sacramento_id_tipo: Number(tipo_sacramento_id_tipo), activo: true },
+      include: [{
+        model: PersonaSacramento,
+        as: "personaSacramentos",
+        required: true,
+        attributes: [],
+        where: Object.keys(wherePS).length > 0 ? wherePS : undefined,
+        include: [{
+          model: Persona,
+          as: "persona",
+          attributes: [],
+          required: Object.keys(wherePersona).length > 0,
+          where: Object.keys(wherePersona).length > 0 ? wherePersona : undefined
+        }]
+      }],
+      order: [['fecha_sacramento', 'DESC'], ['numero', 'DESC']],
+      subQuery: false
+    });
+
+    const idsUnicos = [...new Set(coincidencias.map(s => s.id_sacramento))];
+    const count = idsUnicos.length;
+    const idsPagina = idsUnicos.slice(offset, offset + limitNum);
+
+    if (idsPagina.length === 0) {
+      return res.json({
+        ok: true,
+        resultados: [],
+        total: count,
+        totalPages: Math.ceil(count / limitNum),
+        currentPage: pageNum
+      });
+    }
+
+    // 2. Datos completos, solo de los IDs de esta página
+    const rows = await Sacramento.findAll({
+      where: { id_sacramento: idsPagina },
       include: [
         {
           model: PersonaSacramento,
           as: "personaSacramentos",
-          required: true,
-          where: Object.keys(wherePS).length > 0 ? wherePS : undefined,
-          include: [{
-            model: Persona,
-            as: "persona",
-            required: Object.keys(wherePersona).length > 0,
-            where: Object.keys(wherePersona).length > 0 ? wherePersona : undefined
-          }]
+          include: [{ model: Persona, as: "persona" }]
         },
         { model: TipoSacramento, as: "tipoSacramento" },
         { model: Parroquia, as: "parroquia" },
       ],
-      order: [['fecha_sacramento', 'DESC'], ['numero', 'DESC']],
-      limit: limitNum,
-      offset,
-      distinct: true,
-      col: 'id_sacramento'
+      order: [['fecha_sacramento', 'DESC'], ['numero', 'DESC']]
     });
 
     for (const s of rows) {
