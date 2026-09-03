@@ -4,6 +4,7 @@ const { PutObjectCommand } = require('@aws-sdk/client-s3');
 const { AnalyzeDocumentCommand } = require('@aws-sdk/client-textract');
 const { s3, textract } = require('../config/aws');
 const { parsearSegunTipo } = require('../helpers/ocrParser');
+const { encontrarParroquiaSimilar } = require('../helpers/stringSimilarity');
 const SacramentoOcrHistorico = require('../models/SacramentoOCRHistorico');
 const Sacramento = require('../models/Sacramento');
 const PersonaSacramento = require('../models/PersonaSacramento');
@@ -59,6 +60,19 @@ const procesarOCR = async (req, res = response) => {
     console.log('=====================');
 
     const datosDetectados = parsearSegunTipo(texto, parseInt(tipo_sacramento_id));
+
+    // Fuzzy-match del texto de parroquia detectado contra el catálogo real,
+    // para poder sugerir la corrección (ej. "Gan Gebastian" → "San Sebastián")
+    // en vez de dejar el texto crudo del OCR como si fuera confiable.
+    if (datosDetectados.parroquia) {
+      const catalogoParroquias = await Parroquia.findAll({ attributes: ['id_parroquia', 'nombre'] });
+      const sugerencia = encontrarParroquiaSimilar(datosDetectados.parroquia, catalogoParroquias);
+
+      if (sugerencia) {
+        datosDetectados.parroquia_sugerida_id = sugerencia.id_parroquia;
+        datosDetectados.parroquia_sugerida_nombre = sugerencia.nombre;
+      }
+    }
 
     // Para parroquia
     let parroquiaId = institucion_parroquia_id ? parseInt(institucion_parroquia_id) : null;
@@ -155,9 +169,18 @@ const procesarOCR = async (req, res = response) => {
       try { fs.unlinkSync(req.file.path); } catch (_) {}
     }
     console.error('Error en procesarOCR:', error);
-    return res.status(500).json({
+
+    const esErrorTextractOS3 = ['S3ServiceException', 'InvalidS3ObjectException',
+      'UnsupportedDocumentException', 'DocumentTooLargeException', 'BadDocumentException']
+      .includes(error.name);
+
+    const msg = esErrorTextractOS3
+      ? 'No se pudo leer el documento. Verifica que la imagen esté bien enfocada, en posición vertical y sea una foto (no un PDF u otro archivo).'
+      : 'Ocurrió un error al procesar el documento. Intenta nuevamente en unos minutos.';
+
+    return res.status(esErrorTextractOS3 ? 400 : 500).json({
       ok: false,
-      msg: 'Error al procesar OCR',
+      msg,
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
@@ -733,8 +756,11 @@ const confirmarParroquiaOCR = async (req, res = response) => {
       return res.status(400).json({ ok: false, msg: 'Falta institucion_parroquia_id' });
     }
 
+    // 'pendiente' también se acepta para permitir corregir la parroquia desde
+    // el botón "Atrás" de Paso2 sin que el usuario tenga que rechazar todo el
+    // registro — solo se bloquea una vez que el sacramento ya fue confirmado.
     const historico = await SacramentoOcrHistorico.findOne({
-      where: { id, estado: 'esperando_parroquia' }
+      where: { id, estado: ['esperando_parroquia', 'pendiente'] }
     });
 
     if (!historico) {
@@ -769,9 +795,10 @@ const crearYConfirmarParroquiaOCR = async (req, res = response) => {
       email
     } = req.body;
 
-    // Buscar el histórico en estado esperando_parroquia
+    // Igual que confirmarParroquiaOCR: se acepta 'pendiente' para permitir
+    // corregir la parroquia desde "Atrás" en Paso2, no solo la primera vez.
     const historico = await SacramentoOcrHistorico.findOne({
-      where: { id, estado: 'esperando_parroquia' }
+      where: { id, estado: ['esperando_parroquia', 'pendiente'] }
     });
 
     if (!historico) {

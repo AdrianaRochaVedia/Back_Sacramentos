@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Acta de Bautismo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Cormorant+Garamond:ital,wght@0,500;1,500&family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+:root{ --ink:#1c140a; --accent:#8b6914; --accent-dark:#5a3a00; --paper:#f3ecd6; --paper-edge:#e7dcb8; }
+* { margin:0; padding:0; box-sizing:border-box; }
+html,body{ height:100%; }
+body {
+  background: radial-gradient(ellipse at 30% 20%, #6b6459 0%, #47423a 55%, #2c2924 100%);
+  display:flex; align-items:center; justify-content:center;
+  padding:60px 20px; font-family:'EB Garamond', serif;
+}
+.stage{ position:relative; width:900px; }
+.documento {
+  width:900px; background: var(--paper);
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.10'/%3E%3C/svg%3E"),
+    radial-gradient(ellipse 900px 500px at 50% 0%, rgba(255,252,244,0.55) 0%, rgba(0,0,0,0) 60%),
+    radial-gradient(ellipse 1000px 700px at 50% 100%, rgba(0,0,0,0.10) 0%, rgba(0,0,0,0) 55%);
+  border: 1px solid var(--paper-edge);
+  outline: 3px double var(--accent); outline-offset: -14px;
+  padding: 64px 72px 56px; position: relative;
+  transform: rotate(-1.1deg);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.25), 0 22px 46px -14px rgba(0,0,0,0.55), inset 0 0 90px rgba(139,105,20,0.07);
+}
+.simbolo{ text-align:center; font-family:'Cinzel', serif; font-size:24px; color:var(--accent); margin-bottom:8px; letter-spacing:2px; }
+.sello-agua {
+  position:absolute; top:52%; left:50%; transform: translate(-50%,-50%) rotate(-12deg);
+  width:225px; height:225px; border-radius:50%; border:2px solid #8b691429; opacity:.10;
+  font-family:'Cormorant Garamond', serif; font-style:italic; font-weight:600; font-size:12.5px; letter-spacing:.5px;
+  color:var(--accent-dark); display:flex; align-items:center; justify-content:center; text-align:center;
+  line-height:1.7; padding:32px; pointer-events:none;
+}
+.encabezado{ text-align:center; margin-bottom:20px; border-bottom:1.5px solid var(--accent); padding-bottom:16px; }
+.diocesis{ font-family:'Cormorant Garamond', serif; font-style:italic; font-weight:500; font-size:15px; color:var(--accent-dark); letter-spacing:.5px; margin-bottom:6px; }
+.parroquia-nombre{ font-family:'Cinzel', serif; font-weight:700; font-size:21px; color:var(--ink); letter-spacing:1.3px; text-transform:uppercase; margin-bottom:6px; }
+.parroquia-dir{ font-family:'EB Garamond', serif; font-style:italic; font-size:13px; color:var(--accent-dark); }
+.titulo-acta{ font-family:'Cinzel', serif; font-weight:700; font-size:28px; text-align:center; color:var(--ink); letter-spacing:3px; margin:20px 0 6px; text-transform:uppercase; }
+.libro-ref{ font-family:'Cormorant Garamond', serif; font-style:italic; font-size:14px; text-align:center; color:var(--accent-dark); margin-bottom:10px; }
+.foja-numero{ display:flex; justify-content:space-between; font-family:'EB Garamond', serif; font-size:13px; color:var(--accent-dark); margin-bottom:26px; border-bottom:1px solid #8b691480; padding-bottom:12px; }
+.foja-numero strong{ color:var(--ink); font-weight:700; }
+.cuerpo{ font-family:'EB Garamond', serif; font-size:15.5px; font-style:italic; color:#180f04; line-height:1.95; text-align:justify; }
+.cuerpo p{ margin-bottom:12px; text-indent:44px; }
+.campo-valor{ font-style:normal; font-weight:700; border-bottom:1px solid var(--accent-dark); padding:0 3px; color:#0f0a02; }
+.ornamento{ text-align:center; font-size:18px; color:var(--accent); letter-spacing:14px; margin:16px 0 6px; }
+.firmas{ display:flex; justify-content:space-between; margin-top:44px; gap:14px; }
+.firma-bloque{ flex:1; text-align:center; }
+.firma-espacio{ height:38px; border-bottom:1px solid var(--ink); margin-bottom:6px; }
+.firma-titulo{ font-family:'Cormorant Garamond', serif; font-style:italic; font-size:11px; color:var(--accent-dark); }
+.nota{ margin-top:26px; padding:10px 15px; border-left:3px solid var(--accent); font-family:'EB Garamond', serif; font-size:12px; font-style:italic; color:var(--accent-dark); background:#8b69140c; }
+.clip{ position:absolute; top:-10px; left:60px; width:34px; height:70px;
+  background:linear-gradient(135deg,#c9c9cf,#8f8f97 55%,#c9c9cf); border-radius:4px;
+  box-shadow:0 4px 8px rgba(0,0,0,.35); transform:rotate(-3deg); }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="clip"></div>
+  <div class="documento">
+    <div class="sello-agua">Parroquia San Sebastián — La Paz — Bolivia</div>
+    
+    <div class="encabezado">
+      <div class="diocesis">Diócesis de La Paz — Bolivia</div>
+      <div class="parroquia-nombre">Parroquia San Sebastián</div>
+      <div class="parroquia-dir">Av. Montes N.° 342, La Paz — Tel. 2-220011</div>
+    </div>
+    <div class="titulo-acta">Acta de Bautismo</div>
+    <div class="libro-ref">Libro IV de Bautismos</div>
+    <div class="foja-numero">
+      <span>Foja: <strong>8</strong></span>
+      <span>Número: <strong>41</strong></span>
+    </div>
+    <div class="cuerpo">
+      
+    <p>En la ciudad de <span class="campo-valor">La Paz</span>, departamento de <span class="campo-valor">La Paz</span>, República de Bolivia, a los <span class="campo-valor">doce (12)</span> días del mes de <span class="campo-valor">Marzo</span> del año del Señor <span class="campo-valor">dos mil (2000)</span>, el infrascrito párroco administró solemnemente el <strong>Sacramento del Santo Bautismo</strong> a:</p>
+    <p><strong>Nombre del bautizado:</strong> <span class="campo-valor">Valentina Quispe Mamani</span>, nacida el <span class="campo-valor">15 de Enero de 2000</span> en <span class="campo-valor">La Paz, Bolivia</span>.</p>
+    <p>Hija legítima de <span class="campo-valor">Fernando Quispe Laura</span> y de <span class="campo-valor">Rosario Mamani Álvarez</span>, domiciliados en <span class="campo-valor">Calle Landaeta N.° 215, La Paz</span>.</p>
+    <p>Fueron sus padrinos: <span class="campo-valor">Ricardo Choque Pinto</span> y <span class="campo-valor">Beatriz Salazar Ibáñez</span>, a quienes se les advirtió de las obligaciones espirituales contraídas.</p>
+    <p>Actuó como ministro celebrante el Reverendo <span class="campo-valor">Pbro. Ernesto Callisaya Ticona</span>, párroco titular de esta iglesia.</p>
+    <p>Dando fe de todo lo cual, firman al pie el celebrante y los padrinos en señal de veracidad y conformidad con el presente asiento registral.</p>
+    </div>
+    <div class="ornamento">— ✦ —</div>
+    <div class="firmas"><div class="firma-bloque"><div class="firma-espacio"></div><div class="firma-titulo">Párroco Celebrante</div></div><div class="firma-bloque"><div class="firma-espacio"></div><div class="firma-titulo">Padrino</div></div><div class="firma-bloque"><div class="firma-espacio"></div><div class="firma-titulo">Madrina</div></div></div>
+    <div class="nota">Nota marginal: Expedida a solicitud del interesado el día 3 de Septiembre de 2026. Secretaría Parroquial — Sello y rúbrica.</div>
+  </div>
+</div>
+</body>
+</html>

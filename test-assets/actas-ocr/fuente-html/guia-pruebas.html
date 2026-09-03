@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Guía de pruebas OCR</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --primary:#0f49bd;
+    --primary-light:#eef2fc;
+    --ink:#111827;
+    --muted:#6b7280;
+    --border:#e5e7eb;
+    --good:#0f8a5f;
+    --good-bg:#ecfdf5;
+    --bad:#c62828;
+    --bad-bg:#fef2f2;
+    --accent2:#c99c33;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  @page { size: A4; margin: 0; }
+  body { font-family:'Inter', sans-serif; color:var(--ink); background:#fff; }
+  .hoja{ width:210mm; min-height:297mm; padding:16mm 18mm; page-break-after:always; }
+  .hoja:last-child{ page-break-after:auto; }
+
+  .kicker{ font-size:11px; font-weight:700; color:var(--primary); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px; }
+  h1{ font-size:24px; font-weight:800; letter-spacing:-0.02em; margin-bottom:4px; }
+  .subt{ font-size:13px; color:var(--muted); margin-bottom:22px; }
+
+  h2{ font-size:15px; font-weight:700; color:var(--primary); margin:20px 0 10px; display:flex; align-items:center; gap:8px; }
+  h2 .n{ display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:6px; background:var(--primary); color:#fff; font-size:12px; font-weight:700; flex-shrink:0; }
+
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:4px; }
+  .card{ border:1px solid var(--border); border-radius:10px; padding:12px 14px; }
+  .card.good{ background:var(--good-bg); border-color:#bfe8d6; }
+  .card.bad{ background:var(--bad-bg); border-color:#f3caca; }
+  .card-title{ font-size:12px; font-weight:700; margin-bottom:6px; display:flex; align-items:center; gap:6px; }
+  .card.good .card-title{ color:var(--good); }
+  .card.bad .card-title{ color:var(--bad); }
+  .card ul{ list-style:none; }
+  .card li{ font-size:11.5px; line-height:1.55; margin-bottom:4px; padding-left:14px; position:relative; color:#2a2f3a; }
+  .card li::before{ content:"–"; position:absolute; left:0; color:var(--muted); }
+
+  p.lead{ font-size:12.5px; line-height:1.6; color:#374151; margin-bottom:10px; }
+
+  table{ width:100%; border-collapse:collapse; font-size:11.5px; margin-top:6px; }
+  th{ text-align:left; background:var(--primary-light); color:var(--primary); font-weight:700; padding:7px 10px; border:1px solid var(--border); }
+  td{ padding:7px 10px; border:1px solid var(--border); vertical-align:top; color:#2a2f3a; }
+  tr:nth-child(even) td{ background:#fafafa; }
+  .tag{ display:inline-block; font-size:10px; font-weight:700; padding:2px 7px; border-radius:99px; }
+  .tag.p0{ background:#fef2f2; color:#c62828; }
+  .tag.p1{ background:#fff7ed; color:#c2650a; }
+  .tag.p2{ background:var(--primary-light); color:var(--primary); }
+
+  .foot{ margin-top:26px; padding-top:12px; border-top:1px solid var(--border); font-size:10.5px; color:var(--muted); }
+
+  /* ── Fichas de datos para copiar a mano ── */
+  .persona-card{ border:1px solid var(--border); border-radius:10px; overflow:hidden; margin-bottom:14px; }
+  .persona-head{ background:var(--primary); color:#fff; padding:9px 14px; display:flex; align-items:center; justify-content:space-between; }
+  .persona-head .tipo{ font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; }
+  .persona-head .nombre{ font-size:13px; font-weight:600; }
+  .persona-body{ padding:4px 0; }
+  .fila{ display:grid; grid-template-columns:34% 66%; padding:5px 14px; font-size:11px; border-bottom:1px solid #f1f2f4; }
+  .fila:last-child{ border-bottom:none; }
+  .fila:nth-child(even){ background:#fafbfd; }
+  .fila .campo{ color:var(--muted); font-weight:500; }
+  .fila .valor{ color:var(--ink); font-weight:600; font-family:'Inter',sans-serif; }
+  .fila .valor.mono{ font-weight:500; }
+  .nota-copia{ font-size:10px; color:var(--muted); font-style:italic; margin:6px 0 14px; }
+</style>
+</head>
+<body>
+
+<!-- ── PÁGINA 1 ───────────────────────────────────────────────────────── -->
+<div class="hoja">
+  <div class="kicker">Registro OCR de Sacramentos</div>
+  <h1>Guía para llenar y probar los formularios</h1>
+  <div class="subt">Cómo escribir a mano los formularios en blanco y fotografiarlos para que el OCR los lea bien.</div>
+
+  <h2><span class="n">1</span>Cómo escribir</h2>
+  <div class="grid2">
+    <div class="card good">
+      <div class="card-title">✓ Hacer</div>
+      <ul>
+        <li>Letra de imprenta (de molde), separada — no cursiva unida</li>
+        <li>Lapicero de tinta oscura (negro o azul) sobre el papel blanco</li>
+        <li>Tamaño parejo, ni muy chico ni exagerado — que se note fácil</li>
+        <li>Escribir justo sobre la línea, sin salirse mucho hacia arriba</li>
+        <li>Dejar espacio entre letras y palabras</li>
+        <li>Fechas: igual que está impreso — mes con mayúscula inicial, número del día tal como pide el paréntesis</li>
+      </ul>
+    </div>
+    <div class="card bad">
+      <div class="card-title">✕ Evitar</div>
+      <ul>
+        <li>Lápiz — se ve muy tenue en la foto, poco contraste</li>
+        <li>Cursiva conectada o letra "bonita" decorada</li>
+        <li>Tachones o correcciones sobre lo ya escrito — mejor imprimir otra hoja</li>
+        <li>Comprimir todo el nombre para que "quepa" — si no alcanza, seguir un poco arriba de la línea está bien</li>
+        <li>Abreviar nombres o fechas de forma no estándar</li>
+      </ul>
+    </div>
+  </div>
+  <p class="lead" style="margin-top:8px;">Las firmas del final (Párroco, Padrino, Testigos) sí pueden ser naturales — esas no las lee el sistema, solo dan realismo al documento.</p>
+
+  <h2><span class="n">2</span>Cómo fotografiar</h2>
+  <div class="grid2">
+    <div class="card good">
+      <div class="card-title">✓ Hacer</div>
+      <ul>
+        <li>Luz natural o luz blanca pareja, de día si se puede</li>
+        <li>Papel sobre una superficie plana y oscura (mejor contraste)</li>
+        <li>Celular perpendicular al papel, no en ángulo</li>
+        <li>Encuadrar el documento completo, sin cortar bordes</li>
+        <li>Revisar que el texto se vea nítido antes de subir (hacer zoom en la foto)</li>
+      </ul>
+    </div>
+    <div class="card bad">
+      <div class="card-title">✕ Evitar</div>
+      <ul>
+        <li>Flash directo — genera reflejos sobre el papel</li>
+        <li>Sombra de la mano o del celular sobre el documento</li>
+        <li>Luz amarilla muy fuerte (cambia el color, baja el contraste)</li>
+        <li>Fotos borrosas o movidas</li>
+        <li>Fotografiar con el papel arrugado o doblado sobre el texto</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="foot">Documentos relacionados en esta misma carpeta: <strong>formulario_bautismo.pdf</strong>, <strong>formulario_confirmacion.pdf</strong>, <strong>formulario_primeracomunion.pdf</strong>, <strong>formulario_matrimonio.pdf</strong> — y 9 ejemplos ya rellenados (<strong>*.png</strong>) para subir tal cual.</div>
+</div>
+
+<!-- ── PÁGINA 2 ───────────────────────────────────────────────────────── -->
+<div class="hoja">
+  <div class="kicker">Registro OCR de Sacramentos</div>
+  <h1>Casos de prueba sugeridos</h1>
+  <div class="subt">No solo probar el "camino feliz" — esto es lo que de verdad va a pasar cuando la use el personal de una parroquia.</div>
+
+  <h2><span class="n">3</span>Qué probar además del documento perfecto</h2>
+  <table>
+    <tr><th style="width:26%">Caso</th><th style="width:12%">Por qué</th><th>Qué revisar</th></tr>
+    <tr>
+      <td><strong>Foto ligeramente inclinada</strong></td>
+      <td><span class="tag p1">Realista</span></td>
+      <td>Es lo más común al fotografiar con celular. El sistema debería seguir leyendo los campos.</td>
+    </tr>
+    <tr>
+      <td><strong>Poca luz / sombra parcial</strong></td>
+      <td><span class="tag p1">Realista</span></td>
+      <td>Simula una oficina parroquial con mala iluminación. Ver si el OCR falla o solo pierde algún campo.</td>
+    </tr>
+    <tr>
+      <td><strong>Letra pequeña en un campo</strong></td>
+      <td><span class="tag p2">Borde</span></td>
+      <td>Llenar un nombre largo en espacio chico a propósito, ver si sigue extrayéndolo.</td>
+    </tr>
+    <tr>
+      <td><strong>Campo dejado en blanco</strong></td>
+      <td><span class="tag p2">Borde</span></td>
+      <td>Dejar sin llenar "Foja" o el nombre de un padrino. El sistema debe pedirlo en la revisión, no fallar en silencio.</td>
+    </tr>
+    <tr>
+      <td><strong>Nombre con acentos / ñ</strong></td>
+      <td><span class="tag p2">Borde</span></td>
+      <td>Confirmar que "Ñuflo", "María José", "Peñaranda" etc. se leen bien y no se cortan.</td>
+    </tr>
+    <tr>
+      <td><strong>Archivo que no es imagen</strong></td>
+      <td><span class="tag p0">Validación</span></td>
+      <td>Subir un .pdf, .docx o .txt directamente — debe rechazarlo con un mensaje claro, no quedarse cargando.</td>
+    </tr>
+    <tr>
+      <td><strong>Imagen muy pesada (&gt;10&nbsp;MB)</strong></td>
+      <td><span class="tag p0">Validación</span></td>
+      <td>Foto sin comprimir de un celular reciente. Debe avisar el límite antes de subir, no fallar después.</td>
+    </tr>
+    <tr>
+      <td><strong>Persona repetida</strong></td>
+      <td><span class="tag p1">Negocio</span></td>
+      <td>Subir el mismo bautismo dos veces — el sistema debe detectar el duplicado, no crear dos registros.</td>
+    </tr>
+    <tr>
+      <td><strong>Sacramento sin el previo requerido</strong></td>
+      <td><span class="tag p1">Negocio</span></td>
+      <td>Intentar confirmar una primera comunión de alguien sin bautismo registrado — debe bloquearlo con un mensaje claro.</td>
+    </tr>
+  </table>
+
+  <h2 style="margin-top:22px;"><span class="n">4</span>Antes de la presentación</h2>
+  <p class="lead">Prueba el flujo completo al menos una vez de punta a punta la noche anterior: subir → confirmar parroquia → revisar datos → confirmar sacramento → verlo en el histórico. Así cualquier imprevisto (parroquia no encontrada, campo mal leído) lo resuelves con calma antes, no en vivo.</p>
+
+  <div class="foot">Guía de apoyo para pruebas del módulo OCR — Registro de Sacramentos.</div>
+</div>
+
+<!-- ── PÁGINA 3 — Datos para copiar a mano: Bautismo ───────────────────── -->
+<div class="hoja">
+  <div class="kicker">Registro OCR de Sacramentos</div>
+  <h1>Datos de ejemplo para llenar a mano</h1>
+  <div class="subt">4 personas nuevas — distintas de las 9 ya usadas en los ejemplos digitales — listas para copiar tal cual en los formularios en blanco. Una página por formulario.</div>
+
+  <h2><span class="n">5</span>Formulario de Bautismo</h2>
+  <div class="persona-card">
+    <div class="persona-head"><span class="tipo">Bautismo</span><span class="nombre">Emilia Aguilar Herrera</span></div>
+    <div class="persona-body">
+      <div class="fila"><span class="campo">Diócesis</span><span class="valor">La Paz</span></div>
+      <div class="fila"><span class="campo">Parroquia</span><span class="valor">Cristo Rey</span></div>
+      <div class="fila"><span class="campo">Dirección</span><span class="valor mono">Av. Costanera N.° 512, La Paz — Tel. 2-291045</span></div>
+      <div class="fila"><span class="campo">Foja / Número</span><span class="valor">15 / 302</span></div>
+      <div class="fila"><span class="campo">Ciudad / departamento</span><span class="valor">La Paz / La Paz</span></div>
+      <div class="fila"><span class="campo">"a los ___ (__) días del mes de..."</span><span class="valor">dos (2)</span></div>
+      <div class="fila"><span class="campo">"...del mes de ___..."</span><span class="valor">Marzo</span></div>
+      <div class="fila"><span class="campo">"...del año del Señor ___ (____)"</span><span class="valor">dos mil veinticinco (2025)</span></div>
+      <div class="fila"><span class="campo">Nombre del bautizado</span><span class="valor">Emilia Aguilar Herrera</span></div>
+      <div class="fila"><span class="campo">Nacido(a) el / de / de</span><span class="valor">10 / Febrero / 2025</span></div>
+      <div class="fila"><span class="campo">... en</span><span class="valor">La Paz, Bolivia</span></div>
+      <div class="fila"><span class="campo">Hijo(a) de</span><span class="valor">Marcelo Aguilar Rojas</span></div>
+      <div class="fila"><span class="campo">... y de</span><span class="valor">Cinthia Herrera Solano</span></div>
+      <div class="fila"><span class="campo">Domiciliados en</span><span class="valor">Calle Ballivián N.° 233, La Paz</span></div>
+      <div class="fila"><span class="campo">Padrinos</span><span class="valor">Gustavo Salazar Rivas y Karen Montaño Duarte</span></div>
+      <div class="fila"><span class="campo">Ministro</span><span class="valor">Pbro. Wilson Chura Apaza</span></div>
+    </div>
+  </div>
+  <p class="nota-copia">Los campos entre comillas son fragmentos de la frase ya impresa en el formulario — solo hay que llenar el espacio en blanco correspondiente con el valor de al lado.</p>
+
+  <div class="foot">Documento 1 de 4 — Bautismo (Emilia Aguilar Herrera).</div>
+</div>
+
+<!-- ── PÁGINA 4 — Datos para copiar a mano: Confirmación ───────────────── -->
+<div class="hoja">
+  <div class="kicker">Registro OCR de Sacramentos</div>
+  <h2 style="margin-top:0;"><span class="n">6</span>Formulario de Confirmación</h2>
+  <div class="persona-card">
+    <div class="persona-head"><span class="tipo">Confirmación</span><span class="nombre">David Espinoza Zambrana</span></div>
+    <div class="persona-body">
+      <div class="fila"><span class="campo">Diócesis</span><span class="valor">La Paz</span></div>
+      <div class="fila"><span class="campo">Parroquia</span><span class="valor">San José Obrero</span></div>
+      <div class="fila"><span class="campo">Dirección</span><span class="valor mono">Av. 6 de Agosto N.° 1830, La Paz — Tel. 2-244310</span></div>
+      <div class="fila"><span class="campo">Foja / Número</span><span class="valor">58 / 220</span></div>
+      <div class="fila"><span class="campo">Ciudad</span><span class="valor">La Paz</span></div>
+      <div class="fila"><span class="campo">"siendo las ___ (____) horas..."</span><span class="valor">dieciséis (16:00)</span></div>
+      <div class="fila"><span class="campo">"...del día ___ (__) de..."</span><span class="valor">doce (12)</span></div>
+      <div class="fila"><span class="campo">"...de ___ del año del Señor..."</span><span class="valor">Septiembre</span></div>
+      <div class="fila"><span class="campo">"...del Señor ___ (____)"</span><span class="valor">dos mil veinticinco (2025)</span></div>
+      <div class="fila"><span class="campo">Nombre del confirmado</span><span class="valor">David Espinoza Zambrana</span></div>
+      <div class="fila"><span class="campo">Nacido(a) el / de / de</span><span class="valor">05 / Mayo / 2011</span></div>
+      <div class="fila"><span class="campo">... en</span><span class="valor">La Paz, Bolivia</span></div>
+      <div class="fila"><span class="campo">Hijo(a) de</span><span class="valor">Raúl Espinoza Miranda</span></div>
+      <div class="fila"><span class="campo">... y de</span><span class="valor">Teresa Zambrana Ortiz</span></div>
+      <div class="fila"><span class="campo">Nombre de confirmación</span><span class="valor">Rafael</span></div>
+      <div class="fila"><span class="campo">Padrino de confirmación</span><span class="valor">Álvaro Nina Fernández</span></div>
+      <div class="fila"><span class="campo">Obispo</span><span class="valor">Mons. Aurelio Pesoa Ribera</span></div>
+      <div class="fila"><span class="campo">Obispo de</span><span class="valor">La Paz</span></div>
+      <div class="fila"><span class="campo">Ref. de bautismo (opcional)</span><span class="valor mono">Parroquia Cristo Rey — Libro IV, Foja 15, N.° 302</span></div>
+    </div>
+  </div>
+
+  <div class="foot">Documento 2 de 4 — Confirmación (David Espinoza Zambrana).</div>
+</div>
+
+<!-- ── PÁGINA 5 — Datos para copiar a mano: Primera Comunión ───────────── -->
+<div class="hoja">
+  <div class="kicker">Registro OCR de Sacramentos</div>
+  <h2 style="margin-top:0;"><span class="n">7</span>Formulario de Primera Comunión</h2>
+  <div class="persona-card">
+    <div class="persona-head"><span class="tipo">Primera Comunión</span><span class="nombre">Camila Rocha Guzmán</span></div>
+    <div class="persona-body">
+      <div class="fila"><span class="campo">Diócesis</span><span class="valor">La Paz</span></div>
+      <div class="fila"><span class="campo">Parroquia</span><span class="valor">Santa Bárbara</span></div>
+      <div class="fila"><span class="campo">Dirección</span><span class="valor mono">Calle Comercio N.° 745, La Paz — Tel. 2-208877</span></div>
+      <div class="fila"><span class="campo">Foja / Número</span><span class="valor">30 / 145</span></div>
+      <div class="fila"><span class="campo">Ciudad</span><span class="valor">La Paz</span></div>
+      <div class="fila"><span class="campo">"siendo las ___ (____) horas..."</span><span class="valor">nueve (9:30)</span></div>
+      <div class="fila"><span class="campo">"...del día ___ (__) de..."</span><span class="valor">ocho (8)</span></div>
+      <div class="fila"><span class="campo">"...de ___ del año del Señor..."</span><span class="valor">Junio</span></div>
+      <div class="fila"><span class="campo">"...del Señor ___ (____)"</span><span class="valor">dos mil veinticuatro (2024)</span></div>
+      <div class="fila"><span class="campo">Nombre del comulgado</span><span class="valor">Camila Rocha Guzmán</span></div>
+      <div class="fila"><span class="campo">Nacido(a) el / de / de</span><span class="valor">20 / Agosto / 2016</span></div>
+      <div class="fila"><span class="campo">... en</span><span class="valor">La Paz, Bolivia</span></div>
+      <div class="fila"><span class="campo">Hijo(a) de</span><span class="valor">Iván Rocha Delgado</span></div>
+      <div class="fila"><span class="campo">... y de</span><span class="valor">Silvia Guzmán Peña</span></div>
+      <div class="fila"><span class="campo">Madrina de Primera Comunión</span><span class="valor">Patricia Villarroel Nogales</span></div>
+      <div class="fila"><span class="campo">Ministro</span><span class="valor">Pbro. Marcelo Huanca Ramos</span></div>
+      <div class="fila"><span class="campo">Ref. de bautismo (opcional)</span><span class="valor mono">Parroquia Santa Bárbara — Libro IV, Foja 9, N.° 61</span></div>
+    </div>
+  </div>
+
+  <div class="foot">Documento 3 de 4 — Primera Comunión (Camila Rocha Guzmán).</div>
+</div>
+
+<!-- ── PÁGINA 6 — Datos para copiar a mano: Matrimonio ─────────────────── -->
+<div class="hoja">
+  <div class="kicker">Registro OCR de Sacramentos</div>
+  <h2 style="margin-top:0;"><span class="n">8</span>Formulario de Matrimonio</h2>
+  <div class="persona-card">
+    <div class="persona-head"><span class="tipo">Matrimonio</span><span class="nombre">Sergio Paredes Luna × Daniela Montes Ibáñez</span></div>
+    <div class="persona-body">
+      <div class="fila"><span class="campo">Diócesis</span><span class="valor">La Paz</span></div>
+      <div class="fila"><span class="campo">Parroquia</span><span class="valor">María Auxiliadora</span></div>
+      <div class="fila"><span class="campo">Dirección</span><span class="valor mono">Av. Arce N.° 2140, La Paz — Tel. 2-243390</span></div>
+      <div class="fila"><span class="campo">Foja / Número</span><span class="valor">40 / 88</span></div>
+      <div class="fila"><span class="campo">Ciudad</span><span class="valor">La Paz</span></div>
+      <div class="fila"><span class="campo">"siendo las ___ (____) horas..."</span><span class="valor">dieciocho (18:00)</span></div>
+      <div class="fila"><span class="campo">"...del día ___ (__) de..."</span><span class="valor">seis (6)</span></div>
+      <div class="fila"><span class="campo">"...de ___ del año del Señor..."</span><span class="valor">Diciembre</span></div>
+      <div class="fila"><span class="campo">"...del Señor ___ (____)"</span><span class="valor">dos mil veinticinco (2025)</span></div>
+      <div class="fila"><span class="campo">Contrayente</span><span class="valor">Sergio Paredes Luna</span></div>
+      <div class="fila"><span class="campo">Nacido el / de / de / en</span><span class="valor">18 / Abril / 1994 / La Paz</span></div>
+      <div class="fila"><span class="campo">... hijo de / y de</span><span class="valor">Fernando Paredes Rojas / Carla Luna Vega</span></div>
+      <div class="fila"><span class="campo">Contrayenta</span><span class="valor">Daniela Montes Ibáñez</span></div>
+      <div class="fila"><span class="campo">Nacida el / de / de / en</span><span class="valor">02 / Noviembre / 1995 / Oruro</span></div>
+      <div class="fila"><span class="campo">... hija de / y de</span><span class="valor">Hugo Montes Salazar / Rosa Ibáñez Cordero</span></div>
+      <div class="fila"><span class="campo">Testigos</span><span class="valor">Renato Ovando Cruz y Lucía Fernández Paz</span></div>
+      <div class="fila"><span class="campo">Padrinos de matrimonio</span><span class="valor">Marco Salvatierra Rojas y Andrea Cárdenas Luna</span></div>
+      <div class="fila"><span class="campo">Registro Civil N.°</span><span class="valor">4-3301245</span></div>
+      <div class="fila"><span class="campo">Acta N.°</span><span class="valor">5210</span></div>
+      <div class="fila"><span class="campo">Oficialía de</span><span class="valor">La Paz</span></div>
+      <div class="fila"><span class="campo">Ministro</span><span class="valor">Pbro. Diego Villagómez Roca</span></div>
+    </div>
+  </div>
+
+  <div class="foot">Documento 4 de 4 — Matrimonio (Sergio Paredes Luna × Daniela Montes Ibáñez). Apellidos siguen la convención española (paterno del padre + paterno de la madre), igual que en los 9 ejemplos digitales. Estos 4 ejemplos son nuevos: ninguno coincide con Valentina, Mateo, Sofía ni Joaquín de los archivos .png ya rellenados.</div>
+</div>
+
+</body>
+</html>

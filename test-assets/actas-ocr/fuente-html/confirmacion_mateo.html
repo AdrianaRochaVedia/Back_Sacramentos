@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Acta de Confirmación</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Cormorant+Garamond:ital,wght@0,500;1,500&family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+:root{ --ink:#1c140a; --accent:#5a2d5e; --accent-dark:#341838; --paper:#efe6ef; --paper-edge:#d3bdd6; }
+* { margin:0; padding:0; box-sizing:border-box; }
+html,body{ height:100%; }
+body {
+  background: radial-gradient(ellipse at 30% 20%, #6b6459 0%, #47423a 55%, #2c2924 100%);
+  display:flex; align-items:center; justify-content:center;
+  padding:60px 20px; font-family:'EB Garamond', serif;
+}
+.stage{ position:relative; width:900px; }
+.documento {
+  width:900px; background: var(--paper);
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.10'/%3E%3C/svg%3E"),
+    radial-gradient(ellipse 900px 500px at 50% 0%, rgba(255,252,244,0.55) 0%, rgba(0,0,0,0) 60%),
+    radial-gradient(ellipse 1000px 700px at 50% 100%, rgba(0,0,0,0.10) 0%, rgba(0,0,0,0) 55%);
+  border: 1px solid var(--paper-edge);
+  outline: 3px double var(--accent); outline-offset: -14px;
+  padding: 64px 72px 56px; position: relative;
+  transform: rotate(-1.2deg);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.25), 0 22px 46px -14px rgba(0,0,0,0.55), inset 0 0 90px rgba(90,45,94,0.06);
+}
+.simbolo{ text-align:center; font-family:'Cinzel', serif; font-size:24px; color:var(--accent); margin-bottom:8px; letter-spacing:2px; }
+.sello-agua {
+  position:absolute; top:52%; left:50%; transform: translate(-50%,-50%) rotate(-12deg);
+  width:225px; height:225px; border-radius:50%; border:2px solid #5a2d5e29; opacity:.10;
+  font-family:'Cormorant Garamond', serif; font-style:italic; font-weight:600; font-size:12.5px; letter-spacing:.5px;
+  color:var(--accent-dark); display:flex; align-items:center; justify-content:center; text-align:center;
+  line-height:1.7; padding:32px; pointer-events:none;
+}
+.encabezado{ text-align:center; margin-bottom:20px; border-bottom:1.5px solid var(--accent); padding-bottom:16px; }
+.diocesis{ font-family:'Cormorant Garamond', serif; font-style:italic; font-weight:500; font-size:15px; color:var(--accent-dark); letter-spacing:.5px; margin-bottom:6px; }
+.parroquia-nombre{ font-family:'Cinzel', serif; font-weight:700; font-size:21px; color:var(--ink); letter-spacing:1.3px; text-transform:uppercase; margin-bottom:6px; }
+.parroquia-dir{ font-family:'EB Garamond', serif; font-style:italic; font-size:13px; color:var(--accent-dark); }
+.titulo-acta{ font-family:'Cinzel', serif; font-weight:700; font-size:28px; text-align:center; color:var(--ink); letter-spacing:3px; margin:20px 0 6px; text-transform:uppercase; }
+.libro-ref{ font-family:'Cormorant Garamond', serif; font-style:italic; font-size:14px; text-align:center; color:var(--accent-dark); margin-bottom:10px; }
+.foja-numero{ display:flex; justify-content:space-between; font-family:'EB Garamond', serif; font-size:13px; color:var(--accent-dark); margin-bottom:26px; border-bottom:1px solid #5a2d5e80; padding-bottom:12px; }
+.foja-numero strong{ color:var(--ink); font-weight:700; }
+.cuerpo{ font-family:'EB Garamond', serif; font-size:15.5px; font-style:italic; color:#180f04; line-height:1.95; text-align:justify; }
+.cuerpo p{ margin-bottom:12px; text-indent:44px; }
+.campo-valor{ font-style:normal; font-weight:700; border-bottom:1px solid var(--accent-dark); padding:0 3px; color:#0f0a02; }
+.ornamento{ text-align:center; font-size:18px; color:var(--accent); letter-spacing:14px; margin:16px 0 6px; }
+.firmas{ display:flex; justify-content:space-between; margin-top:44px; gap:14px; }
+.firma-bloque{ flex:1; text-align:center; }
+.firma-espacio{ height:38px; border-bottom:1px solid var(--ink); margin-bottom:6px; }
+.firma-titulo{ font-family:'Cormorant Garamond', serif; font-style:italic; font-size:11px; color:var(--accent-dark); }
+.nota{ margin-top:26px; padding:10px 15px; border-left:3px solid var(--accent); font-family:'EB Garamond', serif; font-size:12px; font-style:italic; color:var(--accent-dark); background:#5a2d5e0c; }
+.clip{ position:absolute; top:-10px; left:58px; width:34px; height:70px;
+  background:linear-gradient(135deg,#c9c9cf,#8f8f97 55%,#c9c9cf); border-radius:4px;
+  box-shadow:0 4px 8px rgba(0,0,0,.35); transform:rotate(-4deg); }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="clip"></div>
+  <div class="documento">
+    <div class="sello-agua">Parroquia Nuestra Señora del Carmen, La Paz, Bolivia</div>
+    <div class="simbolo">✝</div>
+    <div class="encabezado">
+      <div class="diocesis">Diócesis de La Paz — Bolivia</div>
+      <div class="parroquia-nombre">Parroquia Nuestra Señora del Carmen</div>
+      <div class="parroquia-dir">Calle Illimani N.° 88, La Paz — Tel. 2-245100</div>
+    </div>
+    <div class="titulo-acta">Acta de Confirmación</div>
+    <div class="libro-ref">Libro II de Confirmaciones</div>
+    <div class="foja-numero">
+      <span>Foja: <strong>41</strong></span>
+      <span>Número: <strong>176</strong></span>
+    </div>
+    <div class="cuerpo">
+      
+    <p>En la ciudad de <span class="campo-valor">La Paz</span>, República de Bolivia, siendo las <span class="campo-valor">diez (10:00)</span> horas del día <span class="campo-valor">veinticinco (25)</span> de <span class="campo-valor">Junio</span> del año del Señor <span class="campo-valor">dos mil once (2011)</span>, en esta iglesia parroquial, Su Excelencia Reverendísima el Señor Obispo confirió el <strong>Sacramento de la Confirmación</strong> a:</p>
+    <p><strong>Nombre del confirmado:</strong> <span class="campo-valor">Mateo Fernández Ríos</span>, nacido el 03 de Agosto de 1998 en La Paz, Bolivia.</p>
+    <p>Hijo de Gonzalo Fernández Aguilar y de Patricia Ríos Beltrán.</p>
+    <p>Nombre de confirmación asumido: <span class="campo-valor">Andrés</span>.</p>
+    <p>Actuó como padrino de confirmación: <span class="campo-valor">Édgar Poma Chura</span>, a quien se le recordaron las obligaciones espirituales derivadas de este sagrado vínculo.</p>
+    <p>Administró el sacramento Su Excelencia Reverendísima <span class="campo-valor">Mons. Aurelio Pesoa Ribera</span>, Obispo de La Paz.</p>
+    </div>
+    <div class="ornamento">— ✦ —</div>
+    <div class="firmas"><div class="firma-bloque"><div class="firma-espacio"></div><div class="firma-titulo">Secretario Parroquial</div></div><div class="firma-bloque"><div class="firma-espacio"></div><div class="firma-titulo">Obispo / Delegado</div></div><div class="firma-bloque"><div class="firma-espacio"></div><div class="firma-titulo">Padrino de Confirmación</div></div></div>
+    <div class="nota">Referencia de Bautismo: Parroquia Nuestra Señora del Carmen, La Paz — Libro IV, Foja 5, N.° 22.</div>
+  </div>
+</div>
+</body>
+</html>
