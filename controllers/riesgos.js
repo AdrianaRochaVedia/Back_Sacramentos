@@ -234,9 +234,17 @@ const updateRiesgo = async (req, res) => {
       if (vulns.length !== nuevasVulnIds.length)
         return _rollback(t, res, 'Una o más vulnerabilidades/amenazas no son válidas o están inactivas');
 
-      const duplicado = await _existeDuplicadoRiesgo(nuevoActivoId, nuevasVulnIds, riesgo.id_riesgo, t);
-      if (duplicado)
-        return _rollback(t, res, 'Ya existe otro riesgo con este activo y las mismas vulnerabilidades/amenazas');
+      const vulnsActuales = await riesgo.getVulnerabilidades({ transaction: t });
+      const idsActuales = vulnsActuales.map(v => v.id_vulnerabilidad).sort((a, b) => a - b).join(',');
+      const idsNuevos   = [...nuevasVulnIds].map(Number).sort((a, b) => a - b).join(',');
+      const activoCambio = Number(nuevoActivoId) !== Number(riesgo.activo_id);
+      const vulnsCambiaron = idsNuevos !== idsActuales;
+
+      if (activoCambio || vulnsCambiaron) {
+        const duplicado = await _existeDuplicadoRiesgo(nuevoActivoId, nuevasVulnIds, riesgo.id_riesgo, t);
+        if (duplicado)
+          return _rollback(t, res, 'Ya existe otro riesgo con este activo y las mismas vulnerabilidades/amenazas');
+      }
     }
 
     res.locals._instancia = riesgo;

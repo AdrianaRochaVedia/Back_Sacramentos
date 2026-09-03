@@ -1,4 +1,5 @@
 const { response } = require('express');
+const { Op } = require('sequelize');
 const RolSacramento = require('../models/RolSacramento');
 
 // Obtener todos los tipos de sacramento activos
@@ -113,6 +114,15 @@ const actualizarRolSacramento = async (req, res = response) => {
         ok: false,
         msg: 'Rol del sacramento no encontrado'
       });
+    }
+
+    if (nombre !== undefined && nombre !== rolSacramento.nombre) {
+      const existe = await RolSacramento.findOne({
+        where: { nombre, id_rol_sacra: { [Op.ne]: id } }
+      });
+      if (existe) {
+        return res.status(400).json({ ok: false, msg: 'El rol del sacramento ya está registrado' });
+      }
     }
 
     const updates = {};

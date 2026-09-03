@@ -305,14 +305,27 @@ const actualizarPersona = async (req, res) => {
       return res.status(400).json({ ok: false, msg: 'La fecha de nacimiento no puede ser una fecha futura' });
     }
 
-    const validacionPadres = validarApellidoEnPadres({
-      nombre_padre:      nombre_padre      ?? persona.nombre_padre,
-      nombre_madre:      nombre_madre      ?? persona.nombre_madre,
-      apellido_paterno:  apellido_paterno  ?? persona.apellido_paterno,
-      apellido_materno:  apellido_materno  ?? persona.apellido_materno,
-    });
-    if (!validacionPadres.ok) {
-      return res.status(400).json({ ok: false, msg: validacionPadres.msg });
+    const nombrePadreFinal     = nombre_padre      ?? persona.nombre_padre;
+    const nombreMadreFinal     = nombre_madre      ?? persona.nombre_madre;
+    const apellidoPaternoFinal = apellido_paterno  ?? persona.apellido_paterno;
+    const apellidoMaternoFinal = apellido_materno  ?? persona.apellido_materno;
+
+    const datosPadresCambiaron =
+      nombrePadreFinal     !== persona.nombre_padre ||
+      nombreMadreFinal     !== persona.nombre_madre ||
+      apellidoPaternoFinal !== persona.apellido_paterno ||
+      apellidoMaternoFinal !== persona.apellido_materno;
+
+    if (datosPadresCambiaron) {
+      const validacionPadres = validarApellidoEnPadres({
+        nombre_padre:      nombrePadreFinal,
+        nombre_madre:      nombreMadreFinal,
+        apellido_paterno:  apellidoPaternoFinal,
+        apellido_materno:  apellidoMaternoFinal,
+      });
+      if (!validacionPadres.ok) {
+        return res.status(400).json({ ok: false, msg: validacionPadres.msg });
+      }
     }
 
     const updates = {};

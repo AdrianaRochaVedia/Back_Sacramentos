@@ -1,4 +1,5 @@
 const { response } = require('express');
+const { Op } = require('sequelize');
 const Parroquia = require('../models/Parroquia');
 const Usuario = require('../models/Usuario');
 const Rol = require('../models/Rol');
@@ -312,6 +313,42 @@ const actualizarParroquia = async (req, res = response) => {
         ok: false,
         msg: 'Parroquia no encontrada'
       });
+    }
+
+    if (nombre !== undefined && nombre !== parroquia.nombre) {
+      const existeNombre = await Parroquia.findOne({
+        where: { nombre, id_parroquia: { [Op.ne]: id } }
+      });
+      if (existeNombre) {
+        return res.status(400).json({ ok: false, msg: 'La parroquia ya está registrada' });
+      }
+    }
+
+    if (email !== undefined && email !== parroquia.email) {
+      const existeEmail = await Parroquia.findOne({
+        where: { email, id_parroquia: { [Op.ne]: id } }
+      });
+      if (existeEmail) {
+        return res.status(400).json({ ok: false, msg: 'El email ya está registrado' });
+      }
+    }
+
+    if (id_usuario !== undefined && id_usuario !== null) {
+      const usuario = await Usuario.findOne({
+        where: { id_usuario, activo: true },
+        include: [{ model: Rol, as: 'rol', attributes: ['nombre'] }]
+      });
+
+      if (!usuario) {
+        return res.status(400).json({ ok: false, msg: 'El usuario párroco no existe' });
+      }
+
+      if (usuario.rol?.nombre !== 'PARROCO' && usuario.rol?.nombre !== 'parroco') {
+        return res.status(400).json({
+          ok: false,
+          msg: 'El usuario seleccionado no tiene rol de párroco',
+        });
+      }
     }
 
     const updates = {};

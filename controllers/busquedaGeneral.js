@@ -43,7 +43,7 @@ const busquedaGlobal = async (req, res) => {
       where: {
         [Op.or]: [
           { foja: { [Op.iLike]: `%${termino}%` } },
-          { numero: isNaN(termino) ? 0 : parseInt(termino) }
+          ...(isNaN(termino) ? [] : [{ numero: parseInt(termino) }])
         ]
       },
       include: [
