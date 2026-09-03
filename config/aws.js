@@ -1,6 +1,5 @@
 const { S3Client } = require('@aws-sdk/client-s3');
 const { TextractClient } = require('@aws-sdk/client-textract');
-const { Client } = require('@opensearch-project/opensearch');
 
 const region = process.env.AWS_REGION;
 
@@ -20,17 +19,7 @@ const textract = new TextractClient({
   }
 });
 
-// OpenSearch (Con Usuario Maestro)
-const opensearch = new Client({
-  node: process.env.OPENSEARCH_ENDPOINT,
-  auth: {
-    username: process.env.OPENSEARCH_USERNAME,
-    password: process.env.OPENSEARCH_PASSWORD
-  }
-});
-
 module.exports = {
   s3,
-  textract,
-  opensearch
+  textract
 };
