@@ -1,6 +1,11 @@
 // Similitud de strings simple (Levenshtein normalizado) para hacer fuzzy-match
 // entre texto detectado por OCR y catálogos existentes (ej. nombres de parroquia).
 
+// El catálogo real mezcla nombres con y sin el prefijo "Parroquia"/"Iglesia"
+// ("Parroquia Cristo Rey" vs "San Sebastián"), y el OCR casi nunca lo trae.
+// Sin quitarlo, un Levenshtein normal penaliza esas ~10 letras de más como si
+// fueran una diferencia real y el score cae por debajo del umbral aunque el
+// nombre de fondo sea idéntico — por eso se quita antes de comparar.
 const normalizar = (str = '') =>
   str
     .toString()
@@ -9,7 +14,8 @@ const normalizar = (str = '') =>
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, '')
     .replace(/\s+/g, ' ')
-    .trim();
+    .trim()
+    .replace(/^(parroquia|iglesia)(\s+de)?\s+/, '');
 
 const distanciaLevenshtein = (a, b) => {
   const m = a.length;

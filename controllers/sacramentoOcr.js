@@ -4,7 +4,8 @@ const { PutObjectCommand } = require('@aws-sdk/client-s3');
 const { AnalyzeDocumentCommand } = require('@aws-sdk/client-textract');
 const { s3, textract } = require('../config/aws');
 const { parsearSegunTipo } = require('../helpers/ocrParser');
-const { encontrarParroquiaSimilar } = require('../helpers/stringSimilarity');
+const { extraerConGroq } = require('../helpers/ocrGroqExtractor');
+const { encontrarParroquiaSimilar, normalizar } = require('../helpers/stringSimilarity');
 const SacramentoOcrHistorico = require('../models/SacramentoOCRHistorico');
 const Sacramento = require('../models/Sacramento');
 const PersonaSacramento = require('../models/PersonaSacramento');
@@ -59,7 +60,12 @@ const procesarOCR = async (req, res = response) => {
     console.log(texto);
     console.log('=====================');
 
-    const datosDetectados = parsearSegunTipo(texto, parseInt(tipo_sacramento_id));
+    // Groq interpreta el texto del OCR con un LLM (tolera errores de
+    // reconocimiento y formularios llenados a mano); si no hay clave
+    // configurada o la llamada falla, se cae al parser de regex de siempre.
+    const datosDetectados =
+      (await extraerConGroq(texto, parseInt(tipo_sacramento_id))) ||
+      parsearSegunTipo(texto, parseInt(tipo_sacramento_id));
 
     // Fuzzy-match del texto de parroquia detectado contra el catálogo real,
     // para poder sugerir la corrección (ej. "Gan Gebastian" → "San Sebastián")
@@ -80,12 +86,21 @@ const procesarOCR = async (req, res = response) => {
     if (!parroquiaId && datosDetectados.parroquia) {
 
       if (req.body.crear_parroquia === 'true' && req.body.nombre_parroquia) {
-        const nueva = await Parroquia.create({
-          nombre: req.body.nombre_parroquia,
-          direccion: 'Por completar',
-          telefono: 'Por completar',
-          email: `parroquia_${Date.now()}@pendiente.com`
-        });
+        // Reutilizar si ya existe una parroquia con el mismo nombre (con o
+        // sin "Parroquia"/tildes) en vez de crear un duplicado — ver mismo
+        // fix en crearYConfirmarParroquiaOCR.
+        const catalogoActual = await Parroquia.findAll({ attributes: ['id_parroquia', 'nombre'] });
+        const nombreNormalizado = normalizar(req.body.nombre_parroquia);
+        const yaExiste = catalogoActual.find((p) => normalizar(p.nombre) === nombreNormalizado);
+
+        const nueva = yaExiste
+          ? await Parroquia.findByPk(yaExiste.id_parroquia)
+          : await Parroquia.create({
+              nombre: req.body.nombre_parroquia,
+              direccion: 'Por completar',
+              telefono: 'Por completar',
+              email: `parroquia_${Date.now()}@pendiente.com`
+            });
         parroquiaId = nueva.id_parroquia;
 
       } else {
@@ -808,13 +823,22 @@ const crearYConfirmarParroquiaOCR = async (req, res = response) => {
       });
     }
 
-    // Crear la parroquia nueva
-    const nuevaParroquia = await Parroquia.create({
-      nombre: nombre_parroquia,
-      direccion,
-      telefono,
-      email: email ?? `parroquia_${Date.now()}@pendiente.com`
-    });
+    // Si ya existe una parroquia con este mismo nombre (con o sin el prefijo
+    // "Parroquia"/"Iglesia", con o sin tildes) se reutiliza en vez de crear un
+    // duplicado — esto pasaba antes cada vez que el OCR no lograba sugerir la
+    // parroquia ya existente y el usuario terminaba creándola "de nuevo".
+    const catalogoActual = await Parroquia.findAll({ attributes: ['id_parroquia', 'nombre'] });
+    const nombreNormalizado = normalizar(nombre_parroquia);
+    const yaExiste = catalogoActual.find((p) => normalizar(p.nombre) === nombreNormalizado);
+
+    const nuevaParroquia = yaExiste
+      ? await Parroquia.findByPk(yaExiste.id_parroquia)
+      : await Parroquia.create({
+          nombre: nombre_parroquia,
+          direccion,
+          telefono,
+          email: email ?? `parroquia_${Date.now()}@pendiente.com`
+        });
 
     // Actualizar el histórico a 'pendiente' con la nueva parroquia
     await historico.update({
@@ -825,7 +849,9 @@ const crearYConfirmarParroquiaOCR = async (req, res = response) => {
 
     return res.json({
       ok: true,
-      msg: 'Parroquia creada y asignada correctamente',
+      msg: yaExiste
+        ? 'Ya existía una parroquia con ese nombre, se asignó la existente en vez de crear una duplicada'
+        : 'Parroquia creada y asignada correctamente',
       historico_id: historico.id,
       parroquia: {
         id: nuevaParroquia.id_parroquia,

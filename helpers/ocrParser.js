@@ -50,12 +50,18 @@ const extraerFechaSimple = (texto) => {
 };
 
 const extraerFechaNarrativa = (texto) => {
-  const fechaNarrativaMatch = texto.match(/d[ií]as del mes de (\w+) del año[^(]+\((\d{4})\)/i);
+  // Los paréntesis vienen con espacio adentro ("( 2025 )") cuando se llena a
+  // mano en un formulario impreso, aunque en las actas digitales salgan
+  // pegados ("(2025)") — por eso el \s* alrededor de cada dígito.
+  const fechaNarrativaMatch = texto.match(/d[ií]as del mes de (\w+) del año[^(]+\(\s*(\d{4})\s*\)/i);
   if (!fechaNarrativaMatch) return null;
 
   const mes = MESES[fechaNarrativaMatch[1].toLowerCase()] || '01';
   const anio = fechaNarrativaMatch[2];
-  const diaMatch = texto.match(/a los \w+ \((\d{1,2})\) d[ií]as/i);
+  // No se ancla a "a los" + una sola palabra: la palabra escrita a mano para
+  // el día ("dos", "veinte"...) puede salir partida o con ruido de OCR: lo
+  // único confiable es el número entre paréntesis justo antes de "días".
+  const diaMatch = texto.match(/\(\s*(\d{1,2})\s*\)\s*d[ií]as/i);
   const dia = diaMatch ? diaMatch[1].padStart(2, '0') : '01';
 
   return `${dia}/${mes}/${anio}`;
@@ -73,8 +79,11 @@ const extraerFechaLarga = (texto, prefijoRegex) => {
 };
 
 const extraerFechaDiaMesAnio = (texto) => {
-  const diaMatch = texto.match(/d[ií]a\s+\w+\s+\((\d{1,2})\)/i);
-  const mesAnioMatch = texto.match(/de\s+(\w+)\s+del\s+año[^(]+\((\d{4})\)/i);
+  // Igual que en extraerFechaNarrativa: la palabra del día escrita a mano
+  // puede salir partida en varios tokens por ruido de OCR, así que se tolera
+  // un tramo corto de palabras entre "día" y el número entre paréntesis.
+  const diaMatch = texto.match(/d[ií]a\s+[\w\s]{0,20}?\(\s*(\d{1,2})\s*\)/i);
+  const mesAnioMatch = texto.match(/de\s+(\w+)\s+del\s+año[^(]+\(\s*(\d{4})\s*\)/i);
   if (!diaMatch || !mesAnioMatch) return null;
 
   const dia = diaMatch[1].padStart(2, '0');
@@ -106,27 +115,35 @@ const parsers = {
     const numeroMatch = texto.match(/N[uú]mero:\s*(\d+)/i);
     if (numeroMatch) datos.numero = numeroMatch[1];
 
-    const nombreMatch = texto.match(/Nombre del bautizado:\s*(.+?),\s*nacid[oa]/i);
+    // El formulario en blanco imprime "nacido(a)" (neutro, para llenar a mano
+    // sin tener que elegir versión) mientras que las actas ya rellenadas dicen
+    // "nacido" o "nacida" a secas — el (?:\([oa]\))? cubre ambos casos.
+    const nombreMatch = texto.match(/Nombre del bautizado:\s*(.+?)\s*,?\s*nacid[oa](?:\([oa]\))?/i);
     if (nombreMatch) datos.nombre = nombreMatch[1].trim();
 
     datos.fecha_sacramento = extraerFechaNarrativa(texto) || extraerFechaSimple(texto);
 
-    // "...nacido/nacida el 01 de Enero de 2006 en La Paz, Bolivia." — el
+    // "...nacido/nacida(a) el 01 de Enero de 2006 en La Paz, Bolivia." — el
     // documento ya trae esto; antes se descartaba tras extraer el nombre,
     // y además solo reconocía la forma masculina "nacido" (nunca "nacida").
     datos.fecha_nacimiento = extraerFechaLarga(
       texto,
-      /nacid[oa]\s+el\s+(\d{1,2})\s+de\s+(\w+)\s+de\s+(\d{4})/i
+      /nacid[oa](?:\([oa]\))?\s+el\s+(\d{1,2})\s+de\s+(\w+)\s+de\s+(\d{4})/i
     );
 
+    // Corta en el punto final si existe, y si no (el formulario en blanco no
+    // siempre trae uno detectable) corta apenas empieza "Hijo(a)" para no
+    // arrastrar el resto del acta como si fuera el lugar de nacimiento.
     const lugarNacMatch = texto.match(
-      /nacid[oa]\s+el\s+\d{1,2}\s+de\s+\w+\s+de\s+\d{4}\s+en\s+(.+?)\./i
+      /nacid[oa](?:\([oa]\))?\s+el\s+\d{1,2}\s+de\s+\w+\s+de\s+\d{4}\s+en\s+(.+?)(?:\.|\s+[Hh]ij[oa])/i
     );
     if (lugarNacMatch) datos.lugar_nacimiento = lugarNacMatch[1].trim();
 
-    // "Hijo legítimo de X y de Y..." / "Hija legítima de X y de Y..."
+    // "Hijo(a) legítimo(a) de X [y] de Y..." — la "y" se hace opcional porque
+    // Textract a veces la detecta fuera de orden en el texto (agrupa por
+    // posición en la imagen, no por lectura humana) y se pierde de esta zona.
     const padresMatch = texto.match(
-      /[Hh]ij[oa]\s+(?:leg[ií]tim[oa]|natural)?\s*de\s+(.+?)\s+y\s+de\s+(.+?)(?:,\s*domiciliad|\.\s|\.$)/i
+      /[Hh]ij[oa](?:\([oa]\))?\s+(?:leg[ií]tim[oa](?:\([oa]\))?|natural)?\s*de\s+(.+?)\s*(?:y\s+)?de\s+(.+?)(?:,\s*domiciliad|\.\s|\.$)/i
     );
     if (padresMatch) {
       datos.nombre_padre = padresMatch[1].trim();
@@ -250,15 +267,16 @@ const parsers = {
       datos.lugar_ceremonia = lugarMatch[1].trim();
     }
 
+    // "N.°" trae punto Y símbolo de grado a la vez (no solo uno de los dos).
     const regCivilMatch = textoFlat.match(
-      /Registro Civil\s*N[°º]\s*([A-Za-z0-9\/\-]+)/i
+      /Registro Civil\s*N\.?\s*[°º]?\s*([A-Za-z0-9\/\-]+)/i
     );
 
     if (regCivilMatch) {
       datos.reg_civil = regCivilMatch[1].trim();
     }
 
-    const numActaMatch = textoFlat.match(/Acta\s+N[°º\.]?\s*(\d+)/i);
+    const numActaMatch = textoFlat.match(/Acta\s+N\.?\s*[°º]?\s*(\d+)/i);
     if (numActaMatch) datos.numero_acta = numActaMatch[1];
 
     const testigosMatch = textoFlat.match(
